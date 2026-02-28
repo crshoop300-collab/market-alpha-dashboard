@@ -1,0 +1,2163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S.E.A.L. ALPHA TEAM — Market Alpha Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+/* =====================================================================
+   CSS VARIABLES & RESET
+   ===================================================================== */
+:root {
+  --navy: #101517;
+  --navy-light: #1a2228;
+  --navy-mid: #243038;
+  --deep-red: #CF2E2E;
+  --white: #ffffff;
+  --gold: #9B6A36;
+  --gold-dim: rgba(155,106,54,0.15);
+  --gold-glow: rgba(155,106,54,0.35);
+  --green: #00D084;
+  --green-dim: rgba(0,208,132,0.12);
+  --red: #CF2E2E;
+  --red-dim: rgba(207,46,46,0.12);
+  --blue: #3E7D98;
+  --yellow: #9B6A36;
+  --text: #a8b8c0;
+  --text-dim: #5e7078;
+  --text-bright: #dce4e8;
+  --border: rgba(255,255,255,0.06);
+  --border-accent: rgba(255,255,255,0.1);
+  --card-bg: rgba(16,21,23,0.85);
+  --card-bg-solid: #141c20;
+  --font-display: 'Rajdhani', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 6px;
+  --glow-green: 0 0 12px rgba(0,208,132,0.25);
+  --glow-red: 0 0 12px rgba(207,46,46,0.25);
+  --glow-gold: 0 0 18px rgba(155,106,54,0.3);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 13px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-mono);
+  background: linear-gradient(170deg, #0a0f11 0%, #101517 40%, #0e1315 100%);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scanline overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--navy); }
+::-webkit-scrollbar-thumb { background: var(--navy-mid); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #2e3e48; }
+
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* =====================================================================
+   HEADER / COMMAND CENTER
+   ===================================================================== */
+.header {
+  background: linear-gradient(180deg, rgba(16,21,23,0.98) 0%, rgba(16,21,23,0.92) 100%);
+  border-bottom: 1px solid var(--border-accent);
+  padding: 12px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(20px);
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.brand-text h1 {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--white);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.brand-text .subtitle {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--gold);
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.header-metrics {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.metric-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.02);
+  min-width: 80px;
+}
+
+.metric-box .label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.metric-box .value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+}
+
+.metric-box .value.bullish { color: var(--green); }
+.metric-box .value.bearish { color: var(--red); }
+.metric-box .value.neutral { color: var(--text-bright); }
+
+/* Gauge */
+.gauge-container {
+  position: relative;
+  width: 80px;
+  height: 48px;
+  overflow: hidden;
+}
+
+.gauge-container canvas {
+  width: 80px;
+  height: 48px;
+}
+
+.gauge-value {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--white);
+}
+
+/* Flow bars */
+.flow-bar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+
+.flow-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.flow-bar-labels .puts { color: var(--red); }
+.flow-bar-labels .calls { color: var(--green); }
+
+.flow-bar {
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  background: var(--navy-mid);
+}
+
+.flow-bar .call-fill {
+  background: linear-gradient(90deg, #00B870, var(--green));
+  height: 100%;
+  transition: width 0.6s ease;
+}
+
+.flow-bar .put-fill {
+  background: linear-gradient(90deg, var(--red), #a82525);
+  height: 100%;
+  transition: width 0.6s ease;
+}
+
+/* Header controls */
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.date-picker {
+  background: var(--navy-mid);
+  border: 1px solid var(--border-accent);
+  color: var(--text-bright);
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.date-picker::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}
+
+.header-link {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-weight: 600;
+  border: 1px solid rgba(155,106,54,0.3);
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  transition: all 0.2s;
+}
+
+.header-link:hover {
+  background: rgba(155,106,54,0.1);
+  text-decoration: none;
+  border-color: var(--gold);
+}
+
+.update-time {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 4px;
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* =====================================================================
+   DASHBOARD GRID
+   ===================================================================== */
+.dashboard {
+  padding: 16px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+}
+
+.widget {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  animation: fadeInWidget 0.5s ease forwards;
+  opacity: 0;
+}
+
+@keyframes fadeInWidget {
+  to { opacity: 1; }
+}
+
+.widget:nth-child(1) { animation-delay: 0.05s; }
+.widget:nth-child(2) { animation-delay: 0.1s; }
+.widget:nth-child(3) { animation-delay: 0.15s; }
+.widget:nth-child(4) { animation-delay: 0.2s; }
+.widget:nth-child(5) { animation-delay: 0.25s; }
+.widget:nth-child(6) { animation-delay: 0.3s; }
+.widget:nth-child(7) { animation-delay: 0.35s; }
+.widget:nth-child(8) { animation-delay: 0.4s; }
+.widget:nth-child(9) { animation-delay: 0.45s; }
+
+/* Widget sizes */
+.w-full { grid-column: span 12; }
+.w-8 { grid-column: span 8; }
+.w-6 { grid-column: span 6; }
+.w-4 { grid-column: span 4; }
+.w-3 { grid-column: span 3; }
+
+/* Widget header */
+.widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,0,0,0.2);
+}
+
+.widget-title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.widget-title .icon {
+  font-size: 1rem;
+}
+
+.widget-badge {
+  font-size: 0.65rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.widget-body {
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+
+/* =====================================================================
+   GOLDEN TRADES - SPECIAL STYLING
+   ===================================================================== */
+.widget-golden {
+  border: 1px solid rgba(155,106,54,0.35);
+  box-shadow: 0 0 20px rgba(155,106,54,0.08), inset 0 0 30px rgba(155,106,54,0.03);
+}
+
+.widget-golden .widget-header {
+  background: linear-gradient(90deg, rgba(155,106,54,0.12) 0%, rgba(0,0,0,0.2) 100%);
+  border-bottom-color: rgba(155,106,54,0.2);
+}
+
+.widget-golden .widget-title {
+  color: var(--gold);
+}
+
+/* =====================================================================
+   TABLES
+   ===================================================================== */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.data-table th {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-accent);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  background: var(--card-bg-solid);
+  z-index: 2;
+}
+
+.data-table th:hover {
+  color: var(--text-bright);
+}
+
+.data-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+
+.data-table tbody tr:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.data-table .row-golden {
+  background: rgba(155,106,54,0.06) !important;
+}
+
+.data-table .row-golden:hover {
+  background: rgba(155,106,54,0.1) !important;
+}
+
+.data-table .row-golden td:first-child {
+  border-left: 2px solid var(--gold);
+}
+
+/* Tags */
+.tag {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.tag-call {
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid rgba(0,208,132,0.2);
+}
+
+.tag-put {
+  background: var(--red-dim);
+  color: var(--red);
+  border: 1px solid rgba(207,46,46,0.2);
+}
+
+.tag-sweep {
+  background: rgba(77,166,255,0.1);
+  color: var(--blue);
+  border: 1px solid rgba(77,166,255,0.2);
+}
+
+.tag-block {
+  background: rgba(255,193,7,0.1);
+  color: var(--yellow);
+  border: 1px solid rgba(255,193,7,0.2);
+}
+
+.tag-golden {
+  background: var(--gold-dim);
+  color: var(--gold);
+  border: 1px solid rgba(155,106,54,0.3);
+  font-weight: 700;
+}
+
+.tag-ticker {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-bright);
+  border: 1px solid var(--border-accent);
+}
+
+/* Premium styling */
+.premium { font-weight: 600; color: var(--text-bright); }
+.premium-large { font-weight: 700; color: var(--gold); }
+
+/* Score dots */
+.algo-score {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.algo-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--navy-mid);
+}
+
+.algo-dot.active { background: var(--gold); box-shadow: 0 0 4px rgba(155,106,54,0.5); }
+
+/* =====================================================================
+   SECTOR HEATMAP
+   ===================================================================== */
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.heatmap-cell {
+  padding: 14px 10px;
+  border-radius: var(--radius);
+  text-align: center;
+  border: 1px solid var(--border);
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: default;
+}
+
+.heatmap-cell:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+
+.heatmap-cell .sector-name {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--white);
+  margin-bottom: 4px;
+}
+
+.heatmap-cell .sector-premium {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.heatmap-cell .sector-direction {
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.heatmap-cell .sector-orders {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.5);
+  margin-top: 2px;
+}
+
+/* =====================================================================
+   TREND SCORES - HORIZONTAL BARS
+   ===================================================================== */
+.trend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trend-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 90px;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.trend-ticker {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-bright);
+  font-family: var(--font-display);
+  letter-spacing: 1px;
+}
+
+.trend-bar-container {
+  height: 18px;
+  position: relative;
+  background: rgba(255,255,255,0.04);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.trend-bar-container .center-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255,255,255,0.15);
+  z-index: 2;
+}
+
+.trend-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.trend-meta {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-align: right;
+  white-space: nowrap;
+  min-width: 90px;
+  overflow: visible;
+}
+
+.trend-score-val {
+  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+}
+
+/* =====================================================================
+   ALERTS
+   ===================================================================== */
+.alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alert-item {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border-left: 3px solid var(--text-dim);
+  background: rgba(0,0,0,0.15);
+  cursor: default;
+  transition: background 0.2s;
+}
+
+.alert-item:hover {
+  background: rgba(0,0,0,0.25);
+}
+
+.alert-item.severity-high {
+  border-left-color: var(--gold);
+  background: rgba(155,106,54,0.05);
+}
+
+.alert-item.severity-medium {
+  border-left-color: var(--yellow);
+  background: rgba(255,193,7,0.03);
+}
+
+.alert-item.severity-info {
+  border-left-color: var(--blue);
+  background: rgba(77,166,255,0.03);
+}
+
+.alert-title {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alert-type-icon {
+  font-size: 0.85rem;
+}
+
+.alert-desc {
+  font-size: 0.78rem;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.alert-tags {
+  margin-top: 6px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* =====================================================================
+   LEADERBOARD
+   ===================================================================== */
+.leaderboard-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.leader-col {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.leader-col-header {
+  padding: 8px 12px;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-align: center;
+}
+
+.leader-col.bullish .leader-col-header {
+  background: var(--green-dim);
+  color: var(--green);
+  border-bottom: 1px solid rgba(0,208,132,0.15);
+}
+
+.leader-col.bearish .leader-col-header {
+  background: var(--red-dim);
+  color: var(--red);
+  border-bottom: 1px solid rgba(207,46,46,0.15);
+}
+
+.leader-item {
+  display: grid;
+  grid-template-columns: 50px 1fr 60px;
+  align-items: center;
+  padding: 6px 10px;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.leader-item:last-child { border-bottom: none; }
+
+.leader-ticker {
+  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--text-bright);
+}
+
+.leader-bar-wrap {
+  height: 10px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.leader-bar {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.5s ease;
+}
+
+.leader-col.bullish .leader-bar { background: linear-gradient(90deg, rgba(0,208,132,0.3), var(--green)); }
+.leader-col.bearish .leader-bar { background: linear-gradient(90deg, rgba(207,46,46,0.3), var(--red)); }
+
+.leader-premium {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.leader-orders {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+}
+
+/* =====================================================================
+   RECAP CARD
+   ===================================================================== */
+.recap-summary {
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: var(--text);
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: rgba(0,0,0,0.15);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--blue);
+}
+
+.recap-section {
+  margin-bottom: 10px;
+}
+
+.recap-section-title {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.recap-list {
+  list-style: none;
+  font-size: 0.8rem;
+}
+
+.recap-list li {
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.recap-list li:last-child { border-bottom: none; }
+
+.sentiment-trend-label {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--font-display);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* =====================================================================
+   FILTERS
+   ===================================================================== */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.filter-input {
+  background: var(--navy-mid);
+  border: 1px solid var(--border-accent);
+  color: var(--text-bright);
+  padding: 5px 10px;
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  outline: none;
+  width: 120px;
+}
+
+.filter-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 6px rgba(77,166,255,0.2);
+}
+
+.filter-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-accent);
+  color: var(--text);
+  padding: 5px 10px;
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-bright);
+}
+
+.filter-btn.active {
+  background: var(--blue);
+  color: var(--white);
+  border-color: var(--blue);
+}
+
+.filter-btn.active-green {
+  background: rgba(0,208,132,0.15);
+  color: var(--green);
+  border-color: rgba(0,208,132,0.3);
+}
+
+.filter-btn.active-red {
+  background: rgba(207,46,46,0.15);
+  color: var(--red);
+  border-color: rgba(207,46,46,0.3);
+}
+
+.filter-btn.active-gold {
+  background: rgba(155,106,54,0.15);
+  color: var(--gold);
+  border-color: rgba(155,106,54,0.3);
+}
+
+/* =====================================================================
+   TABLE SCROLL WRAPPER
+   ===================================================================== */
+.table-scroll {
+  max-height: 380px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+/* =====================================================================
+   LOADING / EMPTY STATES
+   ===================================================================== */
+.skeleton {
+  background: linear-gradient(90deg, var(--navy-mid) 25%, rgba(36,48,56,0.5) 50%, var(--navy-mid) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius);
+  height: 14px;
+  margin: 6px 0;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 30px 20px;
+  color: var(--text-dim);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+}
+
+.empty-state .empty-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+  opacity: 0.4;
+}
+
+/* =====================================================================
+   CLICKABLE TICKERS
+   ===================================================================== */
+.ticker-link:hover { color: var(--blue) !important; }
+.leader-ticker { cursor: pointer; }
+.leader-ticker:hover { color: var(--blue); }
+.trend-ticker { cursor: pointer; }
+.trend-ticker:hover { color: var(--blue); }
+
+/* =====================================================================
+   TICKER DEEP DIVE
+   ===================================================================== */
+.deep-dive-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(10,15,17,0.95);
+  backdrop-filter: blur(10px);
+  z-index: 500;
+  display: none;
+  overflow-y: auto;
+}
+
+.deep-dive-overlay.active {
+  display: block;
+  animation: fadeInWidget 0.3s ease;
+}
+
+.deep-dive-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.deep-dive-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-accent);
+  margin-bottom: 16px;
+}
+
+.deep-dive-ticker {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--white);
+  letter-spacing: 3px;
+}
+
+.deep-dive-close {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border-accent);
+  color: var(--text);
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+
+.deep-dive-close:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--text-bright);
+}
+
+.deep-dive-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+}
+
+.deep-dive-chart {
+  grid-column: span 12;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-height: 500px;
+}
+
+.deep-dive-stats {
+  grid-column: span 4;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.deep-dive-flow {
+  grid-column: span 8;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.dd-stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+
+.dd-stat-row:last-child { border-bottom: none; }
+
+.dd-stat-label {
+  color: var(--text-dim);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.dd-stat-value {
+  font-weight: 700;
+  color: var(--text-bright);
+}
+
+@media (max-width: 1200px) {
+  .deep-dive-stats { grid-column: span 12; }
+  .deep-dive-flow { grid-column: span 12; }
+}
+
+/* =====================================================================
+   RESPONSIVE
+   ===================================================================== */
+@media (max-width: 1200px) {
+  .w-8 { grid-column: span 12; }
+  .w-6 { grid-column: span 12; }
+  .w-4 { grid-column: span 6; }
+  .w-3 { grid-column: span 6; }
+}
+
+@media (max-width: 768px) {
+  html { font-size: 12px; }
+  .header-top { flex-direction: column; align-items: flex-start; }
+  .header-metrics { width: 100%; justify-content: flex-start; }
+  .header-controls { width: 100%; }
+  .w-full, .w-8, .w-6, .w-4, .w-3 { grid-column: span 12; }
+  .leaderboard-split { grid-template-columns: 1fr; }
+  .dashboard { padding: 8px; }
+  .grid { gap: 10px; }
+  .heatmap-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+}
+
+/* =====================================================================
+   UTILITY CLASSES
+   ===================================================================== */
+.text-green { color: var(--green); }
+.text-red { color: var(--red); }
+.text-gold { color: var(--gold); }
+.text-blue { color: var(--blue); }
+.text-dim { color: var(--text-dim); }
+.text-bright { color: var(--text-bright); }
+.text-yellow { color: var(--yellow); }
+.fw-700 { font-weight: 700; }
+.font-display { font-family: var(--font-display); }
+.font-mono { font-family: var(--font-mono); }
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+.nowrap { white-space: nowrap; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.gap-4 { gap: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ================================================================
+     HEADER
+     ================================================================ -->
+<header class="header" id="header">
+  <div class="header-top">
+    <div class="header-brand">
+      <img src="./assets/logo.jpg" alt="S.E.A.L. Alpha Team" class="brand-logo">
+      <div class="brand-text">
+        <h1>S.E.A.L. Alpha Team</h1>
+        <div class="subtitle">Market Alpha Dashboard</div>
+      </div>
+    </div>
+
+    <div class="header-metrics" id="headerMetrics">
+      <!-- Sentiment Gauge -->
+      <div class="metric-box" style="border-color: rgba(0,208,132,0.15);">
+        <span class="label">Sentiment</span>
+        <div class="gauge-container">
+          <canvas id="sentimentGauge" width="80" height="48"></canvas>
+          <span class="gauge-value" id="sentimentValue">--</span>
+        </div>
+      </div>
+      <!-- P/C Ratio -->
+      <div class="metric-box">
+        <span class="label">P/C Ratio</span>
+        <span class="value neutral" id="pcRatio">--</span>
+      </div>
+      <!-- Flow Bar -->
+      <div class="metric-box" style="min-width: 150px;">
+        <span class="label">Put / Call Flow</span>
+        <div class="flow-bar-container">
+          <div class="flow-bar-labels">
+            <span class="puts" id="putFlowLabel">--</span>
+            <span class="calls" id="callFlowLabel">--</span>
+          </div>
+          <div class="flow-bar">
+            <span class="call-fill" id="callFill" style="width:50%"></span>
+            <span class="put-fill" id="putFill" style="width:50%"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <input type="date" class="date-picker" id="datePicker" value="2026-02-27">
+      <a href="https://sealalphateam.com" target="_blank" rel="noopener noreferrer" class="header-link">sealalphateam.com</a>
+      <div class="update-time">
+        <span class="status-dot"></span>
+        <span id="lastUpdate">Loading...</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ================================================================
+     DASHBOARD
+     ================================================================ -->
+<main class="dashboard">
+  <div class="grid">
+
+    <!-- 1. GOLDEN TRADES (w-full) -->
+    <section class="widget w-full widget-golden" id="widgetGolden">
+      <div class="widget-header">
+        <span class="widget-title"><span class="icon">&#9733;</span> Golden Trades</span>
+        <span class="widget-badge tag-golden" id="goldenCount">0</span>
+      </div>
+      <div class="widget-body">
+        <div class="table-scroll" style="max-height:260px;">
+          <table class="data-table" id="goldenTable">
+            <thead>
+              <tr>
+                <th>Sector</th>
+                <th>Time</th>
+                <th>Ticker</th>
+                <th>Exp</th>
+                <th>Strike</th>
+                <th>C/P</th>
+                <th>Spot</th>
+                <th>Details</th>
+                <th>Premium</th>
+              </tr>
+            </thead>
+            <tbody id="goldenBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. SECTOR HEATMAP (w-6) -->
+    <section class="widget w-6" id="widgetSector">
+      <div class="widget-header">
+        <span class="widget-title"><span class="icon">&#9638;</span> Sector Flow Heatmap</span>
+      </div>
+      <div class="widget-body">
+        <div class="heatmap-grid" id="heatmapGrid"></div>
+      </div>
+    </section>
+
+    <!-- 3. TREND STRENGTH (w-6) -->
+    <section class="widget w-6" id="widgetTrend">
+      <div class="widget-header">
+        <span class="widget-title"><span class="icon">&#9650;</span> Trend Strength Scores</span>
+      </div>
+      <div class="widget-body">
+        <div class="table-scroll" style="max-height:340px;">
+          <div class="trend-list" id="trendList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. PREDICTIVE ALERTS (w-4) -->
+    <section class="widget w-4" id="widgetAlerts">
+      <div class="widget-header">
+        <span class="widget-title"><span class="icon">&#9888;</span> Predictive Alerts</span>
+        <span class="widget-badge" style="background:rgba(207,46,46,0.15);color:var(--red);border:1px solid rgba(207,46,46,0.2);" id="alertCount">0</span>
+      </div>
+      <div class="widget-body">
+        <div class="table-scroll" style="max-height:400px;">
+          <div class="alert-list" id="alertList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. BULLISH / BEARISH LEADERBOARD (w-8) -->
+    <section class="widget w-8" id="widgetLeaderboard">
+      <div class="widget-header">
+        <span class="widget-title"><span class="icon">&#9776;</span> Bullish / Bearish Leaderboard</span>
+      </div>
+      <div class="widget-body">
+        <div class="leaderboard-split" id="leaderboard"></div>
+      </div>
+    </section>
+
+    <!-- 6. ALPHAX PROMO (w-full banner) -->
+    <section class="widget w-full" id="widgetPromo">
+      <div class="widget-header" style="background:linear-gradient(90deg, rgba(155,106,54,0.15) 0%, rgba(207,46,46,0.1) 100%);border-bottom-color:rgba(155,106,54,0.2);">
+        <span class="widget-title" style="color:var(--gold);"><span class="icon">&#9733;</span> AlphaX Options</span>
+      </div>
+      <div class="widget-body" style="padding:20px;">
+        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
+          <div style="flex:1;min-width:200px;">
+            <div style="font-family:var(--font-display);font-size:1.2rem;font-weight:700;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Monthly Research Delivered</div>
+            <p style="font-size:0.82rem;line-height:1.7;color:var(--text);margin-bottom:14px;">Get exclusive monthly research reports with deep analysis on sector rotations, institutional positioning, and high-conviction trade setups from the S.E.A.L. Alpha Team.</p>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
+              <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-bright);"><span style="color:var(--green);">&#10003;</span> Monthly deep-dive research reports</div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-bright);"><span style="color:var(--green);">&#10003;</span> Sector rotation & institutional flow analysis</div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-bright);"><span style="color:var(--gold);">&#9733;</span> <strong>Push alerts for Golden Sweeps & high-severity signals</strong></div>
+            </div>
+            <a href="https://pro.sealalphateam.com/AlphaXMonthly" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg, var(--gold), #7a5528);color:#101517;font-family:var(--font-display);font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;border-radius:var(--radius);text-decoration:none;transition:all 0.2s;box-shadow:0 0 20px rgba(155,106,54,0.2);">Subscribe to AlphaX Monthly</a>
+          </div>
+          <div style="flex-shrink:0;width:120px;height:120px;border:2px solid rgba(155,106,54,0.3);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:var(--glow-gold);">
+            <div style="font-family:var(--font-display);font-size:0.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:2px;">Members get</div>
+            <div style="font-family:var(--font-display);font-size:1.4rem;font-weight:700;color:var(--gold);">LIVE</div>
+            <div style="font-family:var(--font-display);font-size:0.65rem;color:var(--gold);text-transform:uppercase;letter-spacing:1px;">Push Alerts</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. OPTIONS FLOW TABLE (w-full) -->
+    <section class="widget w-full" id="widgetFlow">
+      <div class="widget-header">
+        <span class="widget-title"><span class="icon">&#8644;</span> Options Flow</span>
+        <span class="widget-badge" style="background:rgba(77,166,255,0.15);color:var(--blue);border:1px solid rgba(77,166,255,0.2);" id="flowCount">0</span>
+      </div>
+      <div class="widget-body">
+        <div class="filter-bar" id="flowFilters">
+          <input type="text" class="filter-input" id="filterTicker" placeholder="Search ticker...">
+          <button class="filter-btn" data-filter="calls" id="filterCalls">Calls</button>
+          <button class="filter-btn" data-filter="puts" id="filterPuts">Puts</button>
+          <button class="filter-btn" data-filter="sweep" id="filterSweep">Sweep</button>
+          <button class="filter-btn" data-filter="block" id="filterBlock">Block</button>
+          <button class="filter-btn" data-filter="golden" id="filterGolden">&#9733; Golden Only</button>
+        </div>
+        <div class="table-scroll" style="max-height:440px;">
+          <table class="data-table" id="flowTable">
+            <thead>
+              <tr>
+                <th data-sort="sector">Sector</th>
+                <th data-sort="time">Time</th>
+                <th data-sort="ticker">Ticker</th>
+                <th data-sort="expiry">Exp</th>
+                <th data-sort="strike">Strike</th>
+                <th data-sort="call_put">C/P</th>
+                <th data-sort="spot">Spot</th>
+                <th data-sort="quantity">Qty</th>
+                <th data-sort="price">Price</th>
+                <th data-sort="type">Type</th>
+                <th data-sort="premium_num">Premium</th>
+              </tr>
+            </thead>
+            <tbody id="flowBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. DAILY RECAP (w-full) -->
+    <section class="widget w-full" id="widgetRecap">
+      <div class="widget-header">
+        <span class="widget-title"><span class="icon">&#128196;</span> Daily Recap</span>
+      </div>
+      <div class="widget-body" id="recapBody"></div>
+    </section>
+
+  </div>
+</main>
+
+<!-- ================================================================
+     TICKER DEEP DIVE OVERLAY
+     ================================================================ -->
+<div class="deep-dive-overlay" id="deepDive">
+  <div class="deep-dive-container">
+    <div class="deep-dive-header">
+      <div>
+        <span class="deep-dive-ticker" id="ddTicker">--</span>
+        <span id="ddSpot" style="font-size:1.1rem;font-weight:600;color:var(--text);margin-left:12px;">--</span>
+        <span id="ddSector" class="tag tag-ticker" style="margin-left:12px;"></span>
+      </div>
+      <button class="deep-dive-close" id="ddClose">&#10005; Close</button>
+    </div>
+    <div class="deep-dive-grid">
+      <!-- TradingView Chart -->
+      <div class="deep-dive-chart" id="ddChart"></div>
+      <!-- Stats Panel -->
+      <div class="deep-dive-stats" id="ddStats">
+        <div class="widget-header" style="margin:-14px -14px 14px;padding:10px 14px;border-bottom:1px solid var(--border);background:rgba(0,0,0,0.2);">
+          <span class="widget-title"><span class="icon">&#9733;</span> Flow Summary</span>
+        </div>
+        <div id="ddStatsBody"></div>
+      </div>
+      <!-- Ticker-specific Flow -->
+      <div class="deep-dive-flow" id="ddFlow">
+        <div class="widget-header">
+          <span class="widget-title"><span class="icon">&#8644;</span> All Flow Orders</span>
+          <span class="widget-badge" style="background:rgba(77,166,255,0.15);color:var(--blue);border:1px solid rgba(77,166,255,0.2);" id="ddFlowCount">0</span>
+        </div>
+        <div class="widget-body">
+          <div class="table-scroll" style="max-height:400px;">
+            <table class="data-table" id="ddFlowTable">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Exp</th>
+                  <th>Strike</th>
+                  <th>C/P</th>
+                  <th>Spot</th>
+                  <th>Qty</th>
+                  <th>Price</th>
+                  <th>Type</th>
+                  <th>Premium</th>
+                </tr>
+              </thead>
+              <tbody id="ddFlowBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     JAVASCRIPT
+     ================================================================ -->
+<script>
+(function() {
+  'use strict';
+
+  // =====================================================================
+  // CONFIG
+  // =====================================================================
+  // =====================================================================
+  // EMBEDDED STATIC DATA (generated by export_data.py for 2026-02-27)
+  // To regenerate: python3 export_data.py --date 2026-02-27
+  // =====================================================================
+  const EMBEDDED_DATA = {"dashboard":{"date":"2026-02-27","options_flow":[{"id":25,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"03:30 PM","ticker":"NVDA","expiry":"2026-03-06","strike":130.0,"call_put":"PUTS","spot":131.28,"quantity":1200,"price":3.8,"type":"SWEEP","premium":"$456K","premium_num":456000.0,"algo_score":3,"sector":"TECH","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":24,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"09:30 AM","ticker":"CRWV","expiry":"2026-03-06","strike":85.0,"call_put":"PUTS","spot":79.55,"quantity":800,"price":7.2,"type":"BLOCK","premium":"$576K","premium_num":576000.0,"algo_score":3,"sector":"TECH","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":23,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"09:35 AM","ticker":"SOFI","expiry":"2026-03-14","strike":19.0,"call_put":"CALLS","spot":17.75,"quantity":6000,"price":1.1,"type":"SWEEP","premium":"$660K","premium_num":660000.0,"algo_score":3,"sector":"FINS","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":22,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"09:45 AM","ticker":"BAC","expiry":"2026-03-20","strike":44.0,"call_put":"PUTS","spot":43.2,"quantity":4000,"price":1.35,"type":"SWEEP","premium":"$540K","premium_num":540000.0,"algo_score":2,"sector":"FINS","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":21,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"10:00 AM","ticker":"SLV","expiry":"2026-03-06","strike":30.0,"call_put":"CALLS","spot":29.5,"quantity":8000,"price":0.85,"type":"SWEEP","premium":"$680K","premium_num":680000.0,"algo_score":3,"sector":"ETF/N","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":20,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"10:15 AM","ticker":"DKNG","expiry":"2026-03-20","strike":55.0,"call_put":"CALLS","spot":52.4,"quantity":5000,"price":2.1,"type":"SWEEP","premium":"$1.05M","premium_num":1050000.0,"algo_score":3,"sector":"DISCR","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":19,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"10:30 AM","ticker":"MSTR","expiry":"2026-03-21","strike":350.0,"call_put":"PUTS","spot":342.6,"quantity":400,"price":18.5,"type":"BLOCK","premium":"$740K","premium_num":740000.0,"algo_score":3,"sector":"TECH","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":18,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"10:50 AM","ticker":"PLTR","expiry":"2026-03-14","strike":120.0,"call_put":"CALLS","spot":117.8,"quantity":2500,"price":4.6,"type":"SWEEP","premium":"$1.15M","premium_num":1150000.0,"algo_score":4,"sector":"TECH","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":17,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"11:15 AM","ticker":"IWM","expiry":"2026-03-20","strike":220.0,"call_put":"PUTS","spot":218.5,"quantity":3000,"price":2.8,"type":"SWEEP","premium":"$840K","premium_num":840000.0,"algo_score":3,"sector":"ETF/N","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":16,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"11:45 AM","ticker":"TSLA","expiry":"2026-03-14","strike":410.0,"call_put":"CALLS","spot":399.87,"quantity":900,"price":8.9,"type":"SWEEP","premium":"$801K","premium_num":801000.0,"algo_score":3,"sector":"CONST","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":15,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"12:20 PM","ticker":"NFLX","expiry":"2026-03-13","strike":100.0,"call_put":"CALLS","spot":96.37,"quantity":1800,"price":3.4,"type":"SWEEP","premium":"$612K","premium_num":612000.0,"algo_score":3,"sector":"TECH","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":14,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"12:50 PM","ticker":"META","expiry":"2026-03-20","strike":680.0,"call_put":"CALLS","spot":672.3,"quantity":500,"price":12.5,"type":"BLOCK","premium":"$625K","premium_num":625000.0,"algo_score":3,"sector":"TECH","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":13,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"01:30 PM","ticker":"SPY","expiry":"2026-03-06","strike":595.0,"call_put":"PUTS","spot":592.1,"quantity":2200,"price":4.1,"type":"SWEEP","premium":"$902K","premium_num":902000.0,"algo_score":3,"sector":"ETF/N","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":12,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"01:45 PM","ticker":"AMZN","expiry":"2026-03-21","strike":230.0,"call_put":"CALLS","spot":227.45,"quantity":800,"price":6.8,"type":"BLOCK","premium":"$544K","premium_num":544000.0,"algo_score":3,"sector":"TECH","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":11,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"02:15 PM","ticker":"NVDA","expiry":"2026-03-14","strike":135.0,"call_put":"CALLS","spot":131.28,"quantity":1500,"price":5.2,"type":"SWEEP","premium":"$780K","premium_num":780000.0,"algo_score":3,"sector":"TECH","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":10,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"03:58 PM","ticker":"IBIT","expiry":"2026-03-06","strike":38.5,"call_put":"CALLS","spot":37.19,"quantity":2000,"price":0.49,"type":"SWEEP","premium":"$98K","premium_num":98000.0,"algo_score":2,"sector":"ETF/N","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":9,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"03:58 PM","ticker":"TLT","expiry":"2026-03-20","strike":92.5,"call_put":"CALLS","spot":90.78,"quantity":4540,"price":0.34,"type":"SWEEP","premium":"$154K","premium_num":154000.0,"algo_score":2,"sector":"ETF/N","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":8,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"03:58 PM","ticker":"TLT","expiry":"2026-03-20","strike":92.5,"call_put":"CALLS","spot":90.78,"quantity":3875,"price":0.35,"type":"SWEEP","premium":"$136K","premium_num":136000.0,"algo_score":2,"sector":"ETF/N","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":7,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"03:58 PM","ticker":"USO","expiry":"2026-03-04","strike":82.0,"call_put":"CALLS","spot":81.97,"quantity":882,"price":2.9,"type":"SWEEP","premium":"$256K","premium_num":256000.0,"algo_score":3,"sector":"ETF/N","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":6,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"03:59 PM","ticker":"GLD","expiry":"2026-03-02","strike":486.0,"call_put":"CALLS","spot":483.74,"quantity":1370,"price":3.55,"type":"SWEEP","premium":"$486K","premium_num":486000.0,"algo_score":3,"sector":"ETF/N","is_golden":0,"created_at":"2026-02-27 23:28:30"},{"id":5,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"11:03 AM","ticker":"GLD","expiry":"03/06/26","strike":482.0,"call_put":"CALLS","spot":481.74,"quantity":1940,"price":9.98,"type":"SWEEP","premium":"$1.9M","premium_num":1900000.0,"algo_score":4,"sector":"ETF/N","is_golden":1,"created_at":"2026-02-27 23:28:30"},{"id":4,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"11:24 AM","ticker":"GLD","expiry":"03/06/26","strike":481.0,"call_put":"CALLS","spot":480.55,"quantity":2003,"price":9.77,"type":"SWEEP","premium":"$2M","premium_num":2000000.0,"algo_score":4,"sector":"ETF/N","is_golden":1,"created_at":"2026-02-27 23:28:30"},{"id":3,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"11:26 AM","ticker":"GLD","expiry":"03/06/26","strike":481.0,"call_put":"CALLS","spot":481.01,"quantity":2023,"price":10.1,"type":"SWEEP","premium":"$2M","premium_num":2000000.0,"algo_score":4,"sector":"ETF/N","is_golden":1,"created_at":"2026-02-27 23:28:30"},{"id":2,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"01:23 PM","ticker":"QQQ","expiry":"03/09/26","strike":608.0,"call_put":"CALLS","spot":605.04,"quantity":2000,"price":7.0,"type":"SWEEP","premium":"$1.4M","premium_num":1400000.0,"algo_score":4,"sector":"ETF/N","is_golden":1,"created_at":"2026-02-27 23:28:30"},{"id":1,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"02:40 PM","ticker":"TSLA","expiry":"03/27/26","strike":370.0,"call_put":"PUTS","spot":399.87,"quantity":1422,"price":7.35,"type":"SWEEP","premium":"$1M","premium_num":1000000.0,"algo_score":4,"sector":"CONST","is_golden":1,"created_at":"2026-02-27 23:28:30"}],"golden_trades":[{"id":5,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"11:03 AM","ticker":"GLD","expiry":"03/06/26","strike":482.0,"call_put":"CALLS","spot":481.74,"quantity":1940,"price":9.98,"type":"SWEEP","premium":"$1.9M","premium_num":1900000.0,"algo_score":4,"sector":"ETF/N","is_golden":1,"created_at":"2026-02-27 23:28:30"},{"id":4,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"11:24 AM","ticker":"GLD","expiry":"03/06/26","strike":481.0,"call_put":"CALLS","spot":480.55,"quantity":2003,"price":9.77,"type":"SWEEP","premium":"$2M","premium_num":2000000.0,"algo_score":4,"sector":"ETF/N","is_golden":1,"created_at":"2026-02-27 23:28:30"},{"id":3,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"11:26 AM","ticker":"GLD","expiry":"03/06/26","strike":481.0,"call_put":"CALLS","spot":481.01,"quantity":2023,"price":10.1,"type":"SWEEP","premium":"$2M","premium_num":2000000.0,"algo_score":4,"sector":"ETF/N","is_golden":1,"created_at":"2026-02-27 23:28:30"},{"id":2,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"01:23 PM","ticker":"QQQ","expiry":"03/09/26","strike":608.0,"call_put":"CALLS","spot":605.04,"quantity":2000,"price":7.0,"type":"SWEEP","premium":"$1.4M","premium_num":1400000.0,"algo_score":4,"sector":"ETF/N","is_golden":1,"created_at":"2026-02-27 23:28:30"},{"id":1,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","capture_hour":16,"time":"02:40 PM","ticker":"TSLA","expiry":"03/27/26","strike":370.0,"call_put":"PUTS","spot":399.87,"quantity":1422,"price":7.35,"type":"SWEEP","premium":"$1M","premium_num":1000000.0,"algo_score":4,"sector":"CONST","is_golden":1,"created_at":"2026-02-27 23:28:30"}],"market_snapshot":{"id":1,"capture_date":"2026-02-27","capture_time":"2026-02-27T16:00:00","sentiment_pct":75.0,"put_call_ratio":0.516,"put_flow":269777,"call_flow":523285,"bullish_leaders":"[{\"ticker\": \"GLD\", \"orders\": 10, \"premium\": \"$15.1M\"}, {\"ticker\": \"QQQ\", \"orders\": 40, \"premium\": \"$9.5M\"}, {\"ticker\": \"NVDA\", \"orders\": 59, \"premium\": \"$7M\"}, {\"ticker\": \"SLV\", \"orders\": 9, \"premium\": \"$6.4M\"}, {\"ticker\": \"AMZN\", \"orders\": 31, \"premium\": \"$6.3M\"}, {\"ticker\": \"IAU\", \"orders\": 3, \"premium\": \"$4.9M\"}, {\"ticker\": \"NFLX\", \"orders\": 40, \"premium\": \"$4.8M\"}, {\"ticker\": \"TLT\", \"orders\": 7, \"premium\": \"$4M\"}, {\"ticker\": \"SPY\", \"orders\": 32, \"premium\": \"$4M\"}, {\"ticker\": \"SMH\", \"orders\": 1, \"premium\": \"$3.5M\"}, {\"ticker\": \"IWM\", \"orders\": 35, \"premium\": \"$3M\"}, {\"ticker\": \"TSLA\", \"orders\": 29, \"premium\": \"$2.5M\"}, {\"ticker\": \"META\", \"orders\": 3, \"premium\": \"$2.5M\"}, {\"ticker\": \"DKNG\", \"orders\": 3, \"premium\": \"$2.5M\"}, {\"ticker\": \"PLTR\", \"orders\": 8, \"premium\": \"$2.4M\"}]","bearish_leaders":"[{\"ticker\": \"NVDA\", \"orders\": 24, \"premium\": \"$5.1M\"}, {\"ticker\": \"SPY\", \"orders\": 35, \"premium\": \"$4.5M\"}, {\"ticker\": \"IWM\", \"orders\": 9, \"premium\": \"$4.1M\"}, {\"ticker\": \"TSLA\", \"orders\": 30, \"premium\": \"$4M\"}, {\"ticker\": \"MSTR\", \"orders\": 2, \"premium\": \"$2.9M\"}, {\"ticker\": \"AXP\", \"orders\": 1, \"premium\": \"$2.2M\"}, {\"ticker\": \"QQQ\", \"orders\": 17, \"premium\": \"$2M\"}, {\"ticker\": \"KRE\", \"orders\": 2, \"premium\": \"$1.6M\"}, {\"ticker\": \"CRDO\", \"orders\": 1, \"premium\": \"$1.4M\"}, {\"ticker\": \"EWZ\", \"orders\": 2, \"premium\": \"$1.2M\"}, {\"ticker\": \"BAC\", \"orders\": 6, \"premium\": \"$1.1M\"}, {\"ticker\": \"LOW\", \"orders\": 1, \"premium\": \"$1.1M\"}, {\"ticker\": \"APO\", \"orders\": 3, \"premium\": \"$1.1M\"}, {\"ticker\": \"META\", \"orders\": 6, \"premium\": \"$1M\"}, {\"ticker\": \"AAPL\", \"orders\": 2, \"premium\": \"$893K\"}]","created_at":"2026-02-27 23:28:30"},"unusual_volume":[{"id":8,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"SPY","option_volume":480000,"puts":210000,"calls":270000,"multiple":1.0,"adv":450000,"option_oi":8900000,"events":"","spot":592.1,"atm_ivol_chg":"-0.3%","call_prem_ask":"$18.5M","net_delta":"890,000","created_at":"2026-02-27 23:28:30"},{"id":7,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"TSLA","option_volume":520000,"puts":220000,"calls":300000,"multiple":2.0,"adv":280000,"option_oi":4200000,"events":"","spot":399.87,"atm_ivol_chg":"+1.5%","call_prem_ask":"$32.1M","net_delta":"1,800,000","created_at":"2026-02-27 23:28:30"},{"id":6,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"NVDA","option_volume":580000,"puts":190000,"calls":390000,"multiple":2.0,"adv":310000,"option_oi":5100000,"events":"","spot":131.28,"atm_ivol_chg":"+2.3%","call_prem_ask":"$45.2M","net_delta":"3,200,000","created_at":"2026-02-27 23:28:30"},{"id":5,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"MARA","option_volume":598528,"puts":175664,"calls":422864,"multiple":3.0,"adv":232460,"option_oi":2327118,"events":"Post-ER","spot":8.935,"atm_ivol_chg":"-8.1%","call_prem_ask":"$5.9M","net_delta":"1,077,514","created_at":"2026-02-27 23:28:30"},{"id":4,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"WBD","option_volume":663662,"puts":573080,"calls":90582,"multiple":6.0,"adv":111263,"option_oi":2068628,"events":"52WkIVLow","spot":28.165,"atm_ivol_chg":"-13.0%","call_prem_ask":"$2.5M","net_delta":"147,371","created_at":"2026-02-27 23:28:30"},{"id":3,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"CRWV","option_volume":699853,"puts":334337,"calls":365516,"multiple":3.0,"adv":208814,"option_oi":2225288,"events":"Post-ER/SSR","spot":79.555,"atm_ivol_chg":"-9.4%","call_prem_ask":"$28.7M","net_delta":"-1,235,888","created_at":"2026-02-27 23:28:30"},{"id":2,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"SOFI","option_volume":917241,"puts":291733,"calls":625508,"multiple":2.0,"adv":396967,"option_oi":4858008,"events":"","spot":17.755,"atm_ivol_chg":"+7.1%","call_prem_ask":"$10.7M","net_delta":"-1,766,239","created_at":"2026-02-27 23:28:30"},{"id":1,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"NFLX","option_volume":2991124,"puts":690435,"calls":2300689,"multiple":5.0,"adv":566343,"option_oi":6825751,"events":"","spot":96.37,"atm_ivol_chg":"-0.6%","call_prem_ask":"$240.4M","net_delta":"6,152,767","created_at":"2026-02-27 23:28:30"}],"top_oi_change":[{"id":1,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"NVDA","expiry":"2026-03-06","strike":170.0,"put_call":"P","open_interest":244645,"oi_change":238044,"on_bid_hist":145123,"on_mid_hist":20622,"on_ask_hist":116674,"created_at":"2026-02-27 23:28:30"},{"id":2,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"NVDA","expiry":"2026-03-06","strike":190.0,"put_call":"C","open_interest":105319,"oi_change":91052,"on_bid_hist":87354,"on_mid_hist":72476,"on_ask_hist":61311,"created_at":"2026-02-27 23:28:30"},{"id":3,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"NVDA","expiry":"2026-02-27","strike":190.0,"put_call":"C","open_interest":110416,"oi_change":73414,"on_bid_hist":284424,"on_mid_hist":168533,"on_ask_hist":231151,"created_at":"2026-02-27 23:28:30"},{"id":4,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"NFLX","expiry":"2026-03-02","strike":92.02,"put_call":"C","open_interest":53571,"oi_change":53571,"on_bid_hist":0,"on_mid_hist":53571,"on_ask_hist":0,"created_at":"2026-02-27 23:28:30"},{"id":5,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"NFLX","expiry":"2026-03-02","strike":92.02,"put_call":"P","open_interest":53571,"oi_change":53571,"on_bid_hist":0,"on_mid_hist":53571,"on_ask_hist":0,"created_at":"2026-02-27 23:28:30"},{"id":6,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"TSLA","expiry":"2026-03-14","strike":400.0,"put_call":"C","open_interest":85000,"oi_change":42000,"on_bid_hist":35000,"on_mid_hist":15000,"on_ask_hist":35000,"created_at":"2026-02-27 23:28:30"},{"id":7,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"SPY","expiry":"2026-03-06","strike":590.0,"put_call":"P","open_interest":120000,"oi_change":38000,"on_bid_hist":28000,"on_mid_hist":5000,"on_ask_hist":87000,"created_at":"2026-02-27 23:28:30"},{"id":8,"capture_time":"2026-02-27T16:00:00","capture_date":"2026-02-27","symbol":"QQQ","expiry":"2026-03-09","strike":610.0,"put_call":"C","open_interest":65000,"oi_change":35000,"on_bid_hist":22000,"on_mid_hist":8000,"on_ask_hist":35000,"created_at":"2026-02-27 23:28:30"}],"dark_pool":[],"alerts":[{"id":6,"capture_date":"2026-02-27","capture_time":"2026-02-27T16:00:00","alert_type":"bearish_signal","severity":"medium","title":"TSLA Bearish Flow Exceeds Bullish","description":"TSLA bearish premium ($4M, 30 orders) outpaces bullish ($2.5M, 29 orders). Golden sweep on $370 puts adds conviction. Despite bullish call flow, put side is dominant.","tickers":"TSLA","created_at":"2026-02-27 23:28:30"},{"id":5,"capture_date":"2026-02-27","capture_time":"2026-02-27T16:00:00","alert_type":"golden_sweep","severity":"medium","title":"QQQ Golden Sweep $1.4M","description":"Golden sweep detected on QQQ $608 calls expiring 03/09. $1.4M premium with spot at $605. Near-term bullish positioning on the Nasdaq 100.","tickers":"QQQ","created_at":"2026-02-27 23:28:30"},{"id":4,"capture_date":"2026-02-27","capture_time":"2026-02-27T16:00:00","alert_type":"divergence","severity":"high","title":"NVDA Bull-Bear Tug of War","description":"NVDA appears on both bullish ($7M, 59 orders) and bearish ($5.1M, 24 orders) leaderboards. Large OI change of +238K on $170 puts suggests hedging activity alongside bullish calls.","tickers":"NVDA","created_at":"2026-02-27 23:28:30"},{"id":3,"capture_date":"2026-02-27","capture_time":"2026-02-27T16:00:00","alert_type":"unusual_activity","severity":"medium","title":"NFLX Options Volume 5x Average","description":"Netflix showing 2.99M option volume vs 566K average (5.3x). Heavily call-skewed with $240M in call premium. Watch for potential momentum continuation.","tickers":"NFLX","created_at":"2026-02-27 23:28:30"},{"id":2,"capture_date":"2026-02-27","capture_time":"2026-02-27T16:00:00","alert_type":"sector_trend","severity":"medium","title":"Precious Metals Sector Dominance","description":"GLD leads all bullish flow with $15.1M premium across 10 orders. SLV adds $6.4M. Combined precious metals flow is the strongest sector signal today.","tickers":"GLD,SLV,IAU","created_at":"2026-02-27 23:28:30"},{"id":1,"capture_date":"2026-02-27","capture_time":"2026-02-27T16:00:00","alert_type":"golden_sweep","severity":"high","title":"Massive Gold Bullish Flow Detected","description":"3 consecutive Golden Sweeps on GLD totaling $5.9M in call premium within 30 minutes. Strike $481-482, exp 03/06. Smart money aggressively positioning for gold upside.","tickers":"GLD","created_at":"2026-02-27 23:28:30"}],"daily_recap":{"id":1,"recap_date":"2026-02-27","summary":"Markets closed with 75% bullish sentiment and a 0.516 put/call ratio. Gold dominated flow with massive Golden Sweeps on GLD ($5.9M). Tech names NVDA, AMZN, and META saw significant bullish positioning. Bearish hedging notable in NVDA puts and TSLA, suggesting caution despite overall bullish tilt.","top_bullish":"[\"GLD - $15.1M\", \"QQQ - $9.5M\", \"NVDA - $7M\", \"SLV - $6.4M\", \"AMZN - $6.3M\"]","top_bearish":"[\"NVDA - $5.1M\", \"SPY - $4.5M\", \"IWM - $4.1M\", \"TSLA - $4M\", \"MSTR - $2.9M\"]","golden_trades":"[\"GLD $481C 03/06 - $2M SWEEP\", \"GLD $481C 03/06 - $2M SWEEP\", \"GLD $482C 03/06 - $1.9M SWEEP\", \"QQQ $608C 03/09 - $1.4M SWEEP\", \"TSLA $370P 03/27 - $1M SWEEP\"]","sector_flows":"{\"ETF/N\": {\"bullish\": 47400000, \"bearish\": 11800000}, \"TECH\": {\"bullish\": 19100000, \"bearish\": 9600000}, \"FINS\": {\"bullish\": 1200000, \"bearish\": 1100000}, \"CONST\": {\"bullish\": 3300000, \"bearish\": 4000000}, \"DISCR\": {\"bullish\": 2500000, \"bearish\": 0}}","sentiment_trend":"Bullish momentum with gold safe-haven rotation","created_at":"2026-02-27 23:28:30"}},"sector_heatmap":[{"sector":"ETF/N","call_premium":9110000.0,"put_premium":1742000.0,"total_orders":12,"call_count":10,"put_count":2},{"sector":"TECH","call_premium":3711000.0,"put_premium":1772000.0,"total_orders":8,"call_count":5,"put_count":3},{"sector":"CONST","call_premium":801000.0,"put_premium":1000000.0,"total_orders":2,"call_count":1,"put_count":1},{"sector":"FINS","call_premium":660000.0,"put_premium":540000.0,"total_orders":2,"call_count":1,"put_count":1},{"sector":"DISCR","call_premium":1050000.0,"put_premium":0,"total_orders":1,"call_count":1,"put_count":0}],"trend_scores":[{"ticker":"GLD","flow_count":4,"total_premium":6386000.0,"bullish_premium":6386000.0,"bearish_premium":0,"avg_algo_score":3.75,"golden_count":3,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0},{"ticker":"TSLA","flow_count":2,"total_premium":1801000.0,"bullish_premium":801000.0,"bearish_premium":1000000.0,"avg_algo_score":3.5,"golden_count":1,"bullish_pct":44.5,"bearish_pct":55.5,"trend_score":-11.0},{"ticker":"QQQ","flow_count":1,"total_premium":1400000.0,"bullish_premium":1400000.0,"bearish_premium":0,"avg_algo_score":4.0,"golden_count":1,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0},{"ticker":"NVDA","flow_count":2,"total_premium":1236000.0,"bullish_premium":780000.0,"bearish_premium":456000.0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":63.1,"bearish_pct":36.9,"trend_score":26.2},{"ticker":"PLTR","flow_count":1,"total_premium":1150000.0,"bullish_premium":1150000.0,"bearish_premium":0,"avg_algo_score":4.0,"golden_count":0,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0},{"ticker":"DKNG","flow_count":1,"total_premium":1050000.0,"bullish_premium":1050000.0,"bearish_premium":0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0},{"ticker":"SPY","flow_count":1,"total_premium":902000.0,"bullish_premium":0,"bearish_premium":902000.0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":0.0,"bearish_pct":100.0,"trend_score":-100.0},{"ticker":"IWM","flow_count":1,"total_premium":840000.0,"bullish_premium":0,"bearish_premium":840000.0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":0.0,"bearish_pct":100.0,"trend_score":-100.0},{"ticker":"MSTR","flow_count":1,"total_premium":740000.0,"bullish_premium":0,"bearish_premium":740000.0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":0.0,"bearish_pct":100.0,"trend_score":-100.0},{"ticker":"SLV","flow_count":1,"total_premium":680000.0,"bullish_premium":680000.0,"bearish_premium":0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0},{"ticker":"SOFI","flow_count":1,"total_premium":660000.0,"bullish_premium":660000.0,"bearish_premium":0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0},{"ticker":"META","flow_count":1,"total_premium":625000.0,"bullish_premium":625000.0,"bearish_premium":0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0},{"ticker":"NFLX","flow_count":1,"total_premium":612000.0,"bullish_premium":612000.0,"bearish_premium":0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0},{"ticker":"CRWV","flow_count":1,"total_premium":576000.0,"bullish_premium":0,"bearish_premium":576000.0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":0.0,"bearish_pct":100.0,"trend_score":-100.0},{"ticker":"AMZN","flow_count":1,"total_premium":544000.0,"bullish_premium":544000.0,"bearish_premium":0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0},{"ticker":"BAC","flow_count":1,"total_premium":540000.0,"bullish_premium":0,"bearish_premium":540000.0,"avg_algo_score":2.0,"golden_count":0,"bullish_pct":0.0,"bearish_pct":100.0,"trend_score":-100.0},{"ticker":"TLT","flow_count":2,"total_premium":290000.0,"bullish_premium":290000.0,"bearish_premium":0,"avg_algo_score":2.0,"golden_count":0,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0},{"ticker":"USO","flow_count":1,"total_premium":256000.0,"bullish_premium":256000.0,"bearish_premium":0,"avg_algo_score":3.0,"golden_count":0,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0},{"ticker":"IBIT","flow_count":1,"total_premium":98000.0,"bullish_premium":98000.0,"bearish_premium":0,"avg_algo_score":2.0,"golden_count":0,"bullish_pct":100.0,"bearish_pct":0.0,"trend_score":100.0}]};
+
+  // API_BASE kept as placeholder (not used; fetchEndpoint uses EMBEDDED_DATA)
+  const API_BASE = '__CGI_BIN__/api.py';
+  let currentDate = '2026-02-27';
+  let dashboardData = {};
+  let flowSortCol = null;
+  let flowSortDir = 1;
+  let flowFilters = { ticker: '', calls: false, puts: false, sweep: false, block: false, golden: false };
+
+  // =====================================================================
+  // HELPERS
+  // =====================================================================
+  function formatNum(n) {
+    if (n === null || n === undefined) return '--';
+    if (typeof n === 'string') return n;
+    if (Math.abs(n) >= 1e9) return '$' + (n / 1e9).toFixed(1) + 'B';
+    if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
+    if (Math.abs(n) >= 1e3) return '$' + (n / 1e3).toFixed(0) + 'K';
+    return '$' + n.toFixed(0);
+  }
+
+  function formatCompact(n) {
+    if (n === null || n === undefined) return '--';
+    if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+    return n.toLocaleString();
+  }
+
+  function escHtml(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function renderAlgoScore(score) {
+    let dots = '';
+    for (let i = 1; i <= 5; i++) {
+      dots += '<span class="algo-dot ' + (i <= score ? 'active' : '') + '"></span>';
+    }
+    return '<div class="algo-score">' + dots + '</div>';
+  }
+
+  function cpTag(cp) {
+    if (!cp) return '';
+    const isCall = cp.toUpperCase().includes('CALL');
+    return '<span class="tag ' + (isCall ? 'tag-call' : 'tag-put') + '">' + escHtml(cp) + '</span>';
+  }
+
+  function typeTag(t) {
+    if (!t) return '';
+    const cls = t.toUpperCase().includes('SWEEP') ? 'tag-sweep' : 'tag-block';
+    return '<span class="tag ' + cls + '">' + escHtml(t) + '</span>';
+  }
+
+  function showSkeleton(el, count) {
+    let html = '';
+    for (let i = 0; i < count; i++) {
+      html += '<div class="skeleton" style="width:' + (60 + Math.random() * 35) + '%;height:12px;"></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function showEmpty(el, msg) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9744;</div><div>' + escHtml(msg) + '</div></div>';
+  }
+
+  // =====================================================================
+  // API FETCH
+  // =====================================================================
+  async function fetchEndpoint(endpoint, params) {
+    // Static mode: return data from embedded JSON instead of making network calls
+    if (endpoint === 'dashboard') return Promise.resolve(EMBEDDED_DATA.dashboard);
+    if (endpoint === 'sector_heatmap') return Promise.resolve(EMBEDDED_DATA.sector_heatmap);
+    if (endpoint === 'trend_scores') return Promise.resolve(EMBEDDED_DATA.trend_scores);
+    // Fallback for any other endpoint key that may exist in EMBEDDED_DATA
+    if (Object.prototype.hasOwnProperty.call(EMBEDDED_DATA, endpoint)) {
+      return Promise.resolve(EMBEDDED_DATA[endpoint]);
+    }
+    return Promise.resolve(null);
+  }
+
+  async function loadDashboard() {
+    // Show loading skeletons
+    showSkeleton(document.getElementById('goldenBody'), 5);
+    showSkeleton(document.getElementById('heatmapGrid'), 4);
+    showSkeleton(document.getElementById('trendList'), 6);
+    showSkeleton(document.getElementById('alertList'), 4);
+    showSkeleton(document.getElementById('flowBody'), 8);
+    showSkeleton(document.getElementById('recapBody'), 3);
+    showSkeleton(document.getElementById('leaderboard'), 4);
+
+    try {
+      // Fetch main dashboard data + supplementary endpoints in parallel
+      const [data, sectorData, trendData] = await Promise.all([
+        fetchEndpoint('dashboard', { date: currentDate }),
+        fetchEndpoint('sector_heatmap', { date: currentDate }),
+        fetchEndpoint('trend_scores', { date: currentDate })
+      ]);
+
+      dashboardData = data;
+      dashboardData.sector_heatmap = sectorData;
+      dashboardData.trend_scores = trendData;
+
+      renderHeader(data.market_snapshot);
+      renderGolden(data.golden_trades || []);
+      renderSectorHeatmap(sectorData || []);
+      renderTrendScores(trendData || []);
+      renderAlerts(data.alerts || []);
+      renderLeaderboard(data.market_snapshot);
+      renderFlowTable(data.options_flow || []);
+      renderRecap(data.daily_recap);
+
+      document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } catch (err) {
+      console.error('Dashboard load error:', err);
+      document.getElementById('lastUpdate').textContent = 'Error loading data';
+    }
+  }
+
+  // =====================================================================
+  // HEADER / GAUGE
+  // =====================================================================
+  let gaugeChart = null;
+
+  function renderHeader(snapshot) {
+    if (!snapshot) return;
+
+    const pct = snapshot.sentiment_pct || 0;
+    document.getElementById('sentimentValue').textContent = pct + '%';
+
+    // Sentiment gauge via Chart.js
+    const ctx = document.getElementById('sentimentGauge').getContext('2d');
+    if (gaugeChart) gaugeChart.destroy();
+
+    gaugeChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        datasets: [{
+          data: [pct, 100 - pct],
+          backgroundColor: [
+            pct >= 60 ? '#00D084' : pct >= 40 ? '#ffc107' : '#CF2E2E',
+            'rgba(255,255,255,0.05)'
+          ],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        rotation: -90,
+        circumference: 180,
+        cutout: '70%',
+        responsive: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } }
+      }
+    });
+
+    const sentVal = document.getElementById('sentimentValue');
+    sentVal.style.color = pct >= 60 ? '#00D084' : pct >= 40 ? '#ffc107' : '#CF2E2E';
+
+    // P/C ratio
+    const pcEl = document.getElementById('pcRatio');
+    pcEl.textContent = snapshot.put_call_ratio ? snapshot.put_call_ratio.toFixed(3) : '--';
+    pcEl.className = 'value ' + (snapshot.put_call_ratio < 0.7 ? 'bullish' : snapshot.put_call_ratio > 1 ? 'bearish' : 'neutral');
+
+    // Flow bars
+    const putFlow = snapshot.put_flow || 0;
+    const callFlow = snapshot.call_flow || 0;
+    const totalFlow = putFlow + callFlow || 1;
+    document.getElementById('putFlowLabel').textContent = formatCompact(putFlow);
+    document.getElementById('callFlowLabel').textContent = formatCompact(callFlow);
+    document.getElementById('callFill').style.width = ((callFlow / totalFlow) * 100) + '%';
+    document.getElementById('putFill').style.width = ((putFlow / totalFlow) * 100) + '%';
+  }
+
+  // =====================================================================
+  // GOLDEN TRADES
+  // =====================================================================
+  function renderGolden(trades) {
+    const body = document.getElementById('goldenBody');
+    const badge = document.getElementById('goldenCount');
+    badge.textContent = trades.length;
+
+    if (!trades.length) {
+      body.innerHTML = '<tr><td colspan="9"><div class="empty-state">No golden trades detected today</div></td></tr>';
+      return;
+    }
+
+    body.innerHTML = trades.map(t => `
+      <tr class="row-golden">
+        <td class="text-dim">${escHtml(t.sector)}</td>
+        <td>${escHtml(t.time)}</td>
+        <td class="fw-700 text-bright font-display" style="font-size:0.9rem;"><a href="#" class="ticker-link" data-ticker="${escHtml(t.ticker)}" style="color:inherit;text-decoration:none;">${escHtml(t.ticker)}</a></td>
+        <td>${escHtml(t.expiry)}</td>
+        <td>$${t.strike}</td>
+        <td>${cpTag(t.call_put)}</td>
+        <td>$${t.spot}</td>
+        <td class="text-dim">${(t.quantity || 0).toLocaleString()} @ $${t.price}</td>
+        <td class="premium-large">${escHtml(t.premium)}</td>
+      </tr>
+    `).join('');
+  }
+
+  // =====================================================================
+  // SECTOR HEATMAP
+  // =====================================================================
+  function renderSectorHeatmap(sectors) {
+    const grid = document.getElementById('heatmapGrid');
+
+    if (!sectors.length) {
+      showEmpty(grid, 'No sector data available');
+      return;
+    }
+
+    const maxPrem = Math.max(...sectors.map(s => (s.call_premium || 0) + (s.put_premium || 0)));
+
+    grid.innerHTML = sectors.map(s => {
+      const totalPrem = (s.call_premium || 0) + (s.put_premium || 0);
+      const netDir = (s.call_premium || 0) - (s.put_premium || 0);
+      const isBullish = netDir >= 0;
+      const intensity = Math.min(1, totalPrem / (maxPrem || 1));
+      const alpha = 0.15 + intensity * 0.45;
+
+      const bg = isBullish
+        ? `rgba(0,208,132,${alpha})`
+        : `rgba(207,46,46,${alpha})`;
+
+      const borderClr = isBullish
+        ? `rgba(0,208,132,${0.2 + intensity * 0.3})`
+        : `rgba(207,46,46,${0.2 + intensity * 0.3})`;
+
+      const dirLabel = isBullish ? 'BULLISH' : 'BEARISH';
+      const dirColor = isBullish ? '#00D084' : '#CF2E2E';
+      const dirArrow = isBullish ? '&#9650;' : '&#9660;';
+      const orderWord = s.total_orders === 1 ? 'order' : 'orders';
+
+      return `
+        <div class="heatmap-cell" style="background:${bg};border-color:${borderClr};">
+          <div class="sector-name">${escHtml(s.sector)}</div>
+          <div class="sector-premium" style="color:${dirColor};">${formatNum(totalPrem)}</div>
+          <div class="sector-direction" style="color:${dirColor};">${dirArrow} ${dirLabel}</div>
+          <div class="sector-orders">${s.total_orders} ${orderWord} (${s.call_count}C / ${s.put_count}P)</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // =====================================================================
+  // TREND STRENGTH
+  // =====================================================================
+  function renderTrendScores(scores) {
+    const list = document.getElementById('trendList');
+
+    if (!scores.length) {
+      showEmpty(list, 'No trend data available');
+      return;
+    }
+
+    list.innerHTML = scores.map(s => {
+      const score = s.trend_score || 0;
+      const absScore = Math.abs(score);
+      const barWidth = (absScore / 100) * 50;
+      const isBullish = score >= 0;
+
+      let barStyle, barColor;
+      if (isBullish) {
+        barStyle = `left:50%;width:${barWidth}%;`;
+        barColor = `rgba(0,208,132,${0.3 + (absScore / 100) * 0.5})`;
+      } else {
+        barStyle = `right:50%;width:${barWidth}%;`;
+        barColor = `rgba(207,46,46,${0.3 + (absScore / 100) * 0.5})`;
+      }
+
+      const scoreColor = isBullish ? '#00D084' : '#CF2E2E';
+      const goldenBadge = s.golden_count > 0 ? '<span class="tag tag-golden" style="font-size:0.55rem;margin-left:4px;">&#9733;' + s.golden_count + '</span>' : '';
+      const signStr = score > 0 ? '+' + score : String(score);
+
+      return `
+        <div class="trend-row">
+          <span class="trend-ticker" data-ticker="${escHtml(s.ticker)}">${escHtml(s.ticker)}${goldenBadge}</span>
+          <div class="trend-bar-container">
+            <div class="center-line"></div>
+            <div class="trend-bar" style="${barStyle}background:${barColor};"></div>
+          </div>
+          <span class="trend-meta">
+            <span class="trend-score-val" style="color:${scoreColor};">${signStr}</span><br>
+            <span style="font-size:0.6rem;">${formatNum(s.total_premium)}</span>
+          </span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // =====================================================================
+  // ALERTS
+  // =====================================================================
+  function renderAlerts(alerts) {
+    const list = document.getElementById('alertList');
+    const badge = document.getElementById('alertCount');
+    badge.textContent = alerts.length;
+
+    if (!alerts.length) {
+      showEmpty(list, 'No alerts at this time');
+      return;
+    }
+
+    const typeIcons = {
+      golden_sweep: '&#9733;',
+      sector_trend: '&#9638;',
+      unusual_activity: '&#9888;',
+      divergence: '&#8693;',
+      bearish_signal: '&#9660;'
+    };
+
+    list.innerHTML = alerts.map(a => {
+      const icon = typeIcons[a.alert_type] || '&#8226;';
+      const tickers = a.tickers ? a.tickers.split(',').map(t => `<span class="tag tag-ticker">${escHtml(t.trim())}</span>`).join(' ') : '';
+
+      return `
+        <div class="alert-item severity-${a.severity || 'info'}">
+          <div class="alert-title">
+            <span class="alert-type-icon">${icon}</span>
+            ${escHtml(a.title)}
+          </div>
+          <div class="alert-desc">${escHtml(a.description)}</div>
+          ${tickers ? '<div class="alert-tags">' + tickers + '</div>' : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  // =====================================================================
+  // LEADERBOARD
+  // =====================================================================
+  function renderLeaderboard(snapshot) {
+    const container = document.getElementById('leaderboard');
+
+    if (!snapshot) {
+      showEmpty(container, 'No snapshot data available');
+      return;
+    }
+
+    let bullish = [], bearish = [];
+    try { bullish = JSON.parse(snapshot.bullish_leaders || '[]'); } catch(e) {}
+    try { bearish = JSON.parse(snapshot.bearish_leaders || '[]'); } catch(e) {}
+
+    if (!bullish.length && !bearish.length) {
+      showEmpty(container, 'No leaderboard data available');
+      return;
+    }
+
+    const maxBullPrem = Math.max(...bullish.map(b => parsePremStr(b.premium)), 1);
+    const maxBearPrem = Math.max(...bearish.map(b => parsePremStr(b.premium)), 1);
+
+    function renderCol(items, side, maxP) {
+      const cls = side === 'bullish' ? 'bullish' : 'bearish';
+      const label = side === 'bullish' ? 'Bullish Leaders' : 'Bearish Leaders';
+      let html = `<div class="leader-col ${cls}"><div class="leader-col-header">${label}</div>`;
+      items.slice(0, 10).forEach(item => {
+        const prem = parsePremStr(item.premium);
+        const pct = (prem / maxP) * 100;
+        html += `
+          <div class="leader-item">
+            <span class="leader-ticker" style="cursor:pointer;" data-ticker="${escHtml(item.ticker)}">${escHtml(item.ticker)}</span>
+            <div class="leader-bar-wrap">
+              <div class="leader-bar" style="width:${pct}%"></div>
+            </div>
+            <div>
+              <div class="leader-premium ${cls === 'bullish' ? 'text-green' : 'text-red'}">${escHtml(item.premium)}</div>
+              <div class="leader-orders">${item.orders} orders</div>
+            </div>
+          </div>`;
+      });
+      html += '</div>';
+      return html;
+    }
+
+    container.innerHTML = renderCol(bullish, 'bullish', maxBullPrem) + renderCol(bearish, 'bearish', maxBearPrem);
+  }
+
+  function parsePremStr(s) {
+    if (!s) return 0;
+    s = s.replace('$', '').replace(',', '').trim();
+    if (s.toUpperCase().endsWith('M')) return parseFloat(s) * 1e6;
+    if (s.toUpperCase().endsWith('K')) return parseFloat(s) * 1e3;
+    if (s.toUpperCase().endsWith('B')) return parseFloat(s) * 1e9;
+    return parseFloat(s) || 0;
+  }
+
+  // =====================================================================
+  // OPTIONS FLOW TABLE
+  // =====================================================================
+  function renderFlowTable(flow) {
+    const body = document.getElementById('flowBody');
+    const badge = document.getElementById('flowCount');
+
+    let filtered = flow.slice();
+
+    // Apply filters
+    if (flowFilters.ticker) {
+      const q = flowFilters.ticker.toUpperCase();
+      filtered = filtered.filter(f => (f.ticker || '').toUpperCase().includes(q));
+    }
+    if (flowFilters.calls) filtered = filtered.filter(f => (f.call_put || '').toUpperCase().includes('CALL'));
+    if (flowFilters.puts) filtered = filtered.filter(f => (f.call_put || '').toUpperCase().includes('PUT'));
+    if (flowFilters.sweep) filtered = filtered.filter(f => (f.type || '').toUpperCase().includes('SWEEP'));
+    if (flowFilters.block) filtered = filtered.filter(f => (f.type || '').toUpperCase().includes('BLOCK'));
+    if (flowFilters.golden) filtered = filtered.filter(f => f.is_golden);
+
+    // Sort
+    if (flowSortCol) {
+      filtered.sort((a, b) => {
+        let va = a[flowSortCol], vb = b[flowSortCol];
+        if (typeof va === 'string') va = va.toLowerCase();
+        if (typeof vb === 'string') vb = vb.toLowerCase();
+        if (va < vb) return -1 * flowSortDir;
+        if (va > vb) return 1 * flowSortDir;
+        return 0;
+      });
+    }
+
+    badge.textContent = filtered.length;
+
+    if (!filtered.length) {
+      body.innerHTML = '<tr><td colspan="11"><div class="empty-state">No matching flow data</div></td></tr>';
+      return;
+    }
+
+    body.innerHTML = filtered.map(f => {
+      const rowCls = f.is_golden ? 'row-golden' : '';
+      return `
+        <tr class="${rowCls}">
+          <td class="text-dim">${escHtml(f.sector)}</td>
+          <td>${escHtml(f.time)}</td>
+          <td class="fw-700 text-bright font-display"><a href="#" class="ticker-link" data-ticker="${escHtml(f.ticker)}" style="color:inherit;text-decoration:none;">${escHtml(f.ticker)}</a></td>
+          <td>${escHtml(f.expiry)}</td>
+          <td>$${f.strike}</td>
+          <td>${cpTag(f.call_put)}</td>
+          <td>$${f.spot}</td>
+          <td>${(f.quantity || 0).toLocaleString()}</td>
+          <td>$${f.price}</td>
+          <td>${typeTag(f.type)}</td>
+          <td class="premium">${escHtml(f.premium)}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // =====================================================================
+  // DAILY RECAP
+  // =====================================================================
+  function renderRecap(recap) {
+    const container = document.getElementById('recapBody');
+
+    if (!recap) {
+      showEmpty(container, 'No daily recap available');
+      return;
+    }
+
+    let bullish = [], bearish = [], golden = [];
+    try { bullish = JSON.parse(recap.top_bullish || '[]'); } catch(e) {}
+    try { bearish = JSON.parse(recap.top_bearish || '[]'); } catch(e) {}
+    try { golden = JSON.parse(recap.golden_trades || '[]'); } catch(e) {}
+
+    const trendLabel = recap.sentiment_trend || 'N/A';
+    const trendColor = trendLabel.toLowerCase().includes('bullish') ? 'var(--green)' : trendLabel.toLowerCase().includes('bearish') ? 'var(--red)' : 'var(--blue)';
+    const trendBg = trendLabel.toLowerCase().includes('bullish') ? 'var(--green-dim)' : trendLabel.toLowerCase().includes('bearish') ? 'var(--red-dim)' : 'rgba(77,166,255,0.1)';
+
+    let html = '';
+
+    html += `<div style="margin-bottom:12px;"><span class="sentiment-trend-label" style="color:${trendColor};background:${trendBg};border:1px solid ${trendColor};">${escHtml(trendLabel)}</span></div>`;
+    html += `<div class="recap-summary">${escHtml(recap.summary)}</div>`;
+
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;">';
+
+    // Bullish
+    if (bullish.length) {
+      html += '<div class="recap-section"><div class="recap-section-title text-green">Top Bullish</div><ul class="recap-list">';
+      bullish.forEach(b => { html += `<li class="text-green">${escHtml(b)}</li>`; });
+      html += '</ul></div>';
+    }
+
+    // Bearish
+    if (bearish.length) {
+      html += '<div class="recap-section"><div class="recap-section-title text-red">Top Bearish</div><ul class="recap-list">';
+      bearish.forEach(b => { html += `<li class="text-red">${escHtml(b)}</li>`; });
+      html += '</ul></div>';
+    }
+
+    // Golden
+    if (golden.length) {
+      html += '<div class="recap-section"><div class="recap-section-title text-gold">Golden Trades</div><ul class="recap-list">';
+      golden.forEach(g => { html += `<li class="text-gold">${escHtml(g)}</li>`; });
+      html += '</ul></div>';
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  // =====================================================================
+  // EVENT LISTENERS
+  // =====================================================================
+  // Date picker
+  document.getElementById('datePicker').addEventListener('change', function(e) {
+    currentDate = e.target.value;
+    loadDashboard();
+  });
+
+  // Flow table sort
+  document.querySelectorAll('#flowTable th[data-sort]').forEach(th => {
+    th.addEventListener('click', function() {
+      const col = this.dataset.sort;
+      if (flowSortCol === col) {
+        flowSortDir *= -1;
+      } else {
+        flowSortCol = col;
+        flowSortDir = 1;
+      }
+      // Update header arrows
+      document.querySelectorAll('#flowTable th[data-sort]').forEach(h => {
+        h.textContent = h.textContent.replace(/ [▲▼]/, '');
+      });
+      this.textContent += flowSortDir === 1 ? ' ▲' : ' ▼';
+      renderFlowTable(dashboardData.options_flow || []);
+    });
+  });
+
+  // Flow filters
+  document.getElementById('filterTicker').addEventListener('input', function() {
+    flowFilters.ticker = this.value;
+    renderFlowTable(dashboardData.options_flow || []);
+  });
+
+  function toggleFilter(key, btn, activeClass) {
+    btn.addEventListener('click', function() {
+      // If a mutually exclusive filter is active, deactivate it
+      if (key === 'calls' && flowFilters.puts) {
+        flowFilters.puts = false;
+        document.getElementById('filterPuts').classList.remove('active-red');
+      }
+      if (key === 'puts' && flowFilters.calls) {
+        flowFilters.calls = false;
+        document.getElementById('filterCalls').classList.remove('active-green');
+      }
+      if (key === 'sweep' && flowFilters.block) {
+        flowFilters.block = false;
+        document.getElementById('filterBlock').classList.remove('active');
+      }
+      if (key === 'block' && flowFilters.sweep) {
+        flowFilters.sweep = false;
+        document.getElementById('filterSweep').classList.remove('active');
+      }
+
+      flowFilters[key] = !flowFilters[key];
+      this.classList.toggle(activeClass);
+      renderFlowTable(dashboardData.options_flow || []);
+    });
+  }
+
+  toggleFilter('calls', document.getElementById('filterCalls'), 'active-green');
+  toggleFilter('puts', document.getElementById('filterPuts'), 'active-red');
+  toggleFilter('sweep', document.getElementById('filterSweep'), 'active');
+  toggleFilter('block', document.getElementById('filterBlock'), 'active');
+  toggleFilter('golden', document.getElementById('filterGolden'), 'active-gold');
+
+  // =====================================================================
+  // TICKER DEEP DIVE
+  // =====================================================================
+  let currentDeepDiveTicker = null;
+  let tvScriptLoaded = false;
+
+  function openDeepDive(ticker) {
+    currentDeepDiveTicker = ticker;
+    const overlay = document.getElementById('deepDive');
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    document.getElementById('ddTicker').textContent = ticker;
+
+    // Find ticker data from dashboard
+    const allFlow = dashboardData.options_flow || [];
+    const tickerFlow = allFlow.filter(f => f.ticker === ticker);
+    const goldenFlow = (dashboardData.golden_trades || []).filter(f => f.ticker === ticker);
+
+    // Spot price and sector
+    const latest = tickerFlow[0] || goldenFlow[0];
+    document.getElementById('ddSpot').textContent = latest ? '$' + latest.spot : '--';
+    document.getElementById('ddSector').textContent = latest ? (latest.sector || '--') : '--';
+
+    // Calculate stats
+    const totalPremium = tickerFlow.reduce((s, f) => s + (f.premium_num || 0), 0);
+    const callPremium = tickerFlow.filter(f => (f.call_put||'').toUpperCase().includes('CALL')).reduce((s,f) => s + (f.premium_num||0), 0);
+    const putPremium = tickerFlow.filter(f => (f.call_put||'').toUpperCase().includes('PUT')).reduce((s,f) => s + (f.premium_num||0), 0);
+    const sweepCount = tickerFlow.filter(f => (f.type||'').toUpperCase().includes('SWEEP')).length;
+    const blockCount = tickerFlow.filter(f => (f.type||'').toUpperCase().includes('BLOCK')).length;
+    const goldenCount = tickerFlow.filter(f => f.is_golden).length + goldenFlow.length;
+    const netDirection = callPremium >= putPremium ? 'BULLISH' : 'BEARISH';
+    const netColor = callPremium >= putPremium ? 'var(--green)' : 'var(--red)';
+
+    // Render stats
+    document.getElementById('ddStatsBody').innerHTML = `
+      <div class="dd-stat-row"><span class="dd-stat-label">Net Direction</span><span class="dd-stat-value" style="color:${netColor};">${netDirection}</span></div>
+      <div class="dd-stat-row"><span class="dd-stat-label">Total Premium</span><span class="dd-stat-value">${formatNum(totalPremium)}</span></div>
+      <div class="dd-stat-row"><span class="dd-stat-label">Call Premium</span><span class="dd-stat-value text-green">${formatNum(callPremium)}</span></div>
+      <div class="dd-stat-row"><span class="dd-stat-label">Put Premium</span><span class="dd-stat-value text-red">${formatNum(putPremium)}</span></div>
+      <div class="dd-stat-row"><span class="dd-stat-label">Total Orders</span><span class="dd-stat-value">${tickerFlow.length}</span></div>
+      <div class="dd-stat-row"><span class="dd-stat-label">Sweeps</span><span class="dd-stat-value">${sweepCount}</span></div>
+      <div class="dd-stat-row"><span class="dd-stat-label">Blocks</span><span class="dd-stat-value">${blockCount}</span></div>
+      <div class="dd-stat-row"><span class="dd-stat-label">Golden Trades</span><span class="dd-stat-value text-gold">${goldenCount}</span></div>
+      <div class="dd-stat-row"><span class="dd-stat-label">Call/Put Ratio</span><span class="dd-stat-value">${putPremium > 0 ? (callPremium / putPremium).toFixed(2) : 'N/A'}</span></div>
+    `;
+
+    // Render flow table
+    const combinedFlow = [...goldenFlow, ...tickerFlow];
+    // Deduplicate by id
+    const seen = new Set();
+    const uniqueFlow = combinedFlow.filter(f => {
+      if (seen.has(f.id)) return false;
+      seen.add(f.id);
+      return true;
+    });
+
+    document.getElementById('ddFlowCount').textContent = uniqueFlow.length;
+    const ddBody = document.getElementById('ddFlowBody');
+    if (!uniqueFlow.length) {
+      ddBody.innerHTML = '<tr><td colspan="9"><div class="empty-state">No flow data for this ticker</div></td></tr>';
+    } else {
+      ddBody.innerHTML = uniqueFlow.map(f => {
+        const rowCls = f.is_golden ? 'row-golden' : '';
+        return `
+          <tr class="${rowCls}">
+            <td>${escHtml(f.time)}</td>
+            <td>${escHtml(f.expiry)}</td>
+            <td>$${f.strike}</td>
+            <td>${cpTag(f.call_put)}</td>
+            <td>$${f.spot}</td>
+            <td>${(f.quantity || 0).toLocaleString()}</td>
+            <td>$${f.price}</td>
+            <td>${typeTag(f.type)}</td>
+            <td class="${f.is_golden ? 'premium-large' : 'premium'}">${escHtml(f.premium)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // TradingView widget
+    const chartContainer = document.getElementById('ddChart');
+    chartContainer.innerHTML = '';
+    const tvWidget = document.createElement('div');
+    tvWidget.id = 'tradingview_widget';
+    tvWidget.style.height = '500px';
+    chartContainer.appendChild(tvWidget);
+
+    function initTVWidget() {
+      if (typeof TradingView !== 'undefined') {
+        new TradingView.widget({
+          "autosize": true,
+          "symbol": ticker,
+          "interval": "D",
+          "timezone": "America/New_York",
+          "theme": "dark",
+          "style": "1",
+          "locale": "en",
+          "toolbar_bg": "#101517",
+          "enable_publishing": false,
+          "hide_top_toolbar": false,
+          "hide_legend": false,
+          "save_image": false,
+          "container_id": "tradingview_widget",
+          "backgroundColor": "#101517",
+          "gridColor": "rgba(255,255,255,0.04)",
+          "studies": ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
+          "width": "100%",
+          "height": 500
+        });
+      }
+    }
+
+    if (tvScriptLoaded) {
+      initTVWidget();
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://s3.tradingview.com/tv.js';
+      script.onload = function() {
+        tvScriptLoaded = true;
+        initTVWidget();
+      };
+      document.head.appendChild(script);
+    }
+  }
+
+  function closeDeepDive() {
+    document.getElementById('deepDive').classList.remove('active');
+    document.body.style.overflow = '';
+    currentDeepDiveTicker = null;
+  }
+
+  document.getElementById('ddClose').addEventListener('click', closeDeepDive);
+
+  document.getElementById('deepDive').addEventListener('click', function(e) {
+    if (e.target === this) closeDeepDive();
+  });
+
+  // Event delegation for ticker links
+  document.addEventListener('click', function(e) {
+    const link = e.target.closest('.ticker-link');
+    if (link) {
+      e.preventDefault();
+      openDeepDive(link.dataset.ticker);
+    }
+  });
+
+  // Also make leaderboard tickers clickable
+  document.getElementById('leaderboard').addEventListener('click', function(e) {
+    const ticker = e.target.closest('.leader-ticker');
+    if (ticker && ticker.dataset.ticker) {
+      openDeepDive(ticker.dataset.ticker);
+    }
+  });
+
+  // Make trend tickers clickable
+  document.getElementById('trendList').addEventListener('click', function(e) {
+    const ticker = e.target.closest('.trend-ticker');
+    if (ticker && ticker.dataset.ticker) {
+      openDeepDive(ticker.dataset.ticker);
+    }
+  });
+
+  // =====================================================================
+  // AUTO-REFRESH (every 5 min during market hours)
+  // =====================================================================
+  function isMarketHours() {
+    const now = new Date();
+    // Convert to ET
+    const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const etDate = new Date(etStr);
+    const hours = etDate.getHours();
+    const mins = etDate.getMinutes();
+    const day = etDate.getDay();
+    if (day === 0 || day === 6) return false;
+    const totalMin = hours * 60 + mins;
+    return totalMin >= 570 && totalMin <= 960; // 9:30 - 16:00
+  }
+
+  setInterval(function() {
+    if (isMarketHours()) {
+      loadDashboard();
+    }
+  }, 5 * 60 * 1000);
+
+  // =====================================================================
+  // INIT
+  // =====================================================================
+  loadDashboard();
+
+})();
+</script>
+</body>
+</html>
