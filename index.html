@@ -1589,7 +1589,7 @@ a:hover { text-decoration: underline; }
     badge.textContent = trades.length;
 
     if (!trades.length) {
-      body.innerHTML = '<tr><td colspan="9"><div class="empty-state">No golden trades detected today</div></td></tr>';
+      body.innerHTML = '<tr><td colspan="9"><div class="empty-state">No alpha trades detected today</div></td></tr>';
       return;
     }
 
@@ -1896,7 +1896,7 @@ a:hover { text-decoration: underline; }
 
     // Golden
     if (golden.length) {
-      html += '<div class="recap-section"><div class="recap-section-title text-gold">Golden Trades</div><ul class="recap-list">';
+      html += '<div class="recap-section"><div class="recap-section-title text-gold">Alpha Trades</div><ul class="recap-list">';
       golden.forEach(g => { html += `<li class="text-gold">${escHtml(g)}</li>`; });
       html += '</ul></div>';
     }
@@ -2014,7 +2014,7 @@ a:hover { text-decoration: underline; }
       <div class="dd-stat-row"><span class="dd-stat-label">Total Orders</span><span class="dd-stat-value">${tickerFlow.length}</span></div>
       <div class="dd-stat-row"><span class="dd-stat-label">Sweeps</span><span class="dd-stat-value">${sweepCount}</span></div>
       <div class="dd-stat-row"><span class="dd-stat-label">Blocks</span><span class="dd-stat-value">${blockCount}</span></div>
-      <div class="dd-stat-row"><span class="dd-stat-label">Golden Trades</span><span class="dd-stat-value text-gold">${goldenCount}</span></div>
+      <div class="dd-stat-row"><span class="dd-stat-label">Alpha Trades</span><span class="dd-stat-value text-gold">${goldenCount}</span></div>
       <div class="dd-stat-row"><span class="dd-stat-label">Call/Put Ratio</span><span class="dd-stat-value">${putPremium > 0 ? (callPremium / putPremium).toFixed(2) : 'N/A'}</span></div>
     `;
 
