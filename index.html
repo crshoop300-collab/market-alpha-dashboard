@@ -1432,14 +1432,16 @@ select.date-picker option {
       <!-- Ticker-specific Flow -->
       <div class="deep-dive-flow" id="ddFlow">
         <div class="widget-header">
-          <span class="widget-title"><span class="icon">&#8644;</span> All Flow Orders</span>
+          <span class="widget-title"><span class="icon">&#8644;</span> 30-Day Flow History</span>
           <span class="widget-badge" style="background:rgba(77,166,255,0.15);color:var(--blue);border:1px solid rgba(77,166,255,0.2);" id="ddFlowCount">0</span>
         </div>
         <div class="widget-body">
+          <div style="padding:8px 16px;font-size:0.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border);">Trailing 30 days from selected date</div>
           <div class="table-scroll" style="max-height:400px;">
             <table class="data-table" id="ddFlowTable">
               <thead>
                 <tr>
+                  <th>Date</th>
                   <th>Time</th>
                   <th>Exp</th>
                   <th>Strike</th>
@@ -126314,13 +126316,32 @@ select.date-picker option {
 
     document.getElementById('ddTicker').textContent = ticker;
 
-    // Find ticker data from dashboard
-    const allFlow = dashboardData.options_flow || [];
-    const tickerFlow = allFlow.filter(f => f.ticker === ticker);
-    const goldenFlow = (dashboardData.golden_trades || []).filter(f => f.ticker === ticker);
+    // Build 30-day flow history across all available dates
+    // Use currentDate as the anchor; include trades from any date within trailing 30 days
+    const anchorDate = new Date(currentDate + 'T00:00:00');
+    const windowStart = new Date(anchorDate);
+    windowStart.setDate(windowStart.getDate() - 30);
+    
+    const allDatesData = EMBEDDED_DATA.data || {};
+    let tickerFlow = [];
+    for (const dateStr of Object.keys(allDatesData)) {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (d > anchorDate || d < windowStart) continue;
+      const dayFlow = (allDatesData[dateStr].dashboard?.options_flow || []);
+      dayFlow.forEach(f => {
+        if (f.ticker === ticker) {
+          tickerFlow.push({ ...f, _trade_date: dateStr });
+        }
+      });
+    }
+    // Sort newest first by date, then by time
+    tickerFlow.sort((a, b) => {
+      if (b._trade_date !== a._trade_date) return b._trade_date.localeCompare(a._trade_date);
+      return (b.time || '').localeCompare(a.time || '');
+    });
 
-    // Spot price and sector
-    const latest = tickerFlow[0] || goldenFlow[0];
+    // Spot price (most recent) and sector
+    const latest = tickerFlow[0];
     document.getElementById('ddSpot').textContent = latest ? '$' + latest.spot : '--';
     document.getElementById('ddSector').textContent = latest ? (latest.sector || '--') : '--';
 
@@ -126330,7 +126351,7 @@ select.date-picker option {
     const putPremium = tickerFlow.filter(f => { const u = (f.call_put||'').toUpperCase().trim(); return u === 'P' || u === 'PUT' || u === 'PUTS'; }).reduce((s,f) => s + (f.premium_num||0), 0);
     const sweepCount = tickerFlow.filter(f => (f.type||'').toUpperCase().includes('SWEEP')).length;
     const blockCount = tickerFlow.filter(f => (f.type||'').toUpperCase().includes('BLOCK')).length;
-    const goldenCount = tickerFlow.filter(f => f.is_golden).length + goldenFlow.length;
+    const goldenCount = tickerFlow.filter(f => f.is_golden).length;
     const netDirection = callPremium >= putPremium ? 'BULLISH' : 'BEARISH';
     const netColor = callPremium >= putPremium ? 'var(--green)' : 'var(--red)';
 
@@ -126347,11 +126368,9 @@ select.date-picker option {
       <div class="dd-stat-row"><span class="dd-stat-label">Call/Put Ratio</span><span class="dd-stat-value">${putPremium > 0 ? (callPremium / putPremium).toFixed(2) : 'N/A'}</span></div>
     `;
 
-    // Render flow table
-    const combinedFlow = [...goldenFlow, ...tickerFlow];
-    // Deduplicate by id
+    // Render flow table (deduplicate by id across days, although ids should be unique)
     const seen = new Set();
-    const uniqueFlow = combinedFlow.filter(f => {
+    const uniqueFlow = tickerFlow.filter(f => {
       if (seen.has(f.id)) return false;
       seen.add(f.id);
       return true;
@@ -126360,12 +126379,15 @@ select.date-picker option {
     document.getElementById('ddFlowCount').textContent = uniqueFlow.length;
     const ddBody = document.getElementById('ddFlowBody');
     if (!uniqueFlow.length) {
-      ddBody.innerHTML = '<tr><td colspan="9"><div class="empty-state">No flow data for this ticker</div></td></tr>';
+      ddBody.innerHTML = '<tr><td colspan="10"><div class="empty-state">No flow data for this ticker in the last 30 days</div></td></tr>';
     } else {
       ddBody.innerHTML = uniqueFlow.map(f => {
         const rowCls = f.is_golden ? 'row-golden' : '';
+        // Format date as MM/DD
+        const dateShort = f._trade_date ? f._trade_date.slice(5).replace('-', '/') : '--';
         return `
           <tr class="${rowCls}">
+            <td>${dateShort}</td>
             <td>${escHtml(f.time)}</td>
             <td>${escHtml(f.expiry)}</td>
             <td>$${f.strike}</td>
