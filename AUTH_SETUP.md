@@ -76,6 +76,19 @@ npm run import:options -- C:\Users\Shoop\Downloads\option_export__06_05_2026.csv
 
 The importer still updates `index.html`; the protected Next.js route serves that same file to active members.
 
+## Saved Watchlists
+
+The dashboard now injects a member watchlist drawer into the protected dashboard response.
+
+Members can:
+
+- Drag Alpha Trade or Options Flow rows into the Watchlist drawer.
+- Use the `Watch` button added to trade rows.
+- Save notes per watched trade.
+- Log back in later and see the same saved watchlist.
+
+The data is stored in the Supabase `watchlist_items` table created by `supabase/schema.sql`, scoped by `auth.uid()` row-level-security policies.
+
 ## Member Flow
 
 1. Visitor opens `https://alpha.sealalphateam.com`.
