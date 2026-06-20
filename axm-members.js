@@ -41,6 +41,29 @@
   function tradeKey(t) {
     return String((t && (t.optionSymbol || t.ticker || t.structure)) || '').toUpperCase();
   }
+  function optionSymbolFromTrade(t) {
+    var ticker = String((t && t.ticker) || '').toUpperCase();
+    var structure = String((t && t.structure) || '').toUpperCase();
+    var explicit = structure.match(/\b[A-Z]{1,6}\d{6}[CP]\d{8}\b/);
+    if (explicit) return explicit[0];
+
+    var m = structure.match(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{1,2})\s+(\d{4})\s+\$?([0-9]+(?:\.[0-9]+)?)\s+(CALL|PUT)\b/);
+    if (!ticker || !m) return '';
+    var months = { JAN:'01', FEB:'02', MAR:'03', APR:'04', MAY:'05', JUN:'06', JUL:'07', AUG:'08', SEP:'09', OCT:'10', NOV:'11', DEC:'12' };
+    var yy = m[3].slice(-2);
+    var mm = months[m[1]];
+    var dd = String(Number(m[2])).padStart(2, '0');
+    var cp = m[5] === 'CALL' ? 'C' : 'P';
+    var strike = String(Math.round(Number(m[4]) * 1000)).padStart(8, '0');
+    return ticker + yy + mm + dd + cp + strike;
+  }
+  function yahooOptionUrl(t) {
+    var symbol = optionSymbolFromTrade(t);
+    return symbol ? 'https://finance.yahoo.com/quote/' + encodeURIComponent(symbol) : '';
+  }
+  function alphaTickerUrl(ticker) {
+    return DASHBOARD_URL + '/?ticker=' + encodeURIComponent(String(ticker || '').toUpperCase());
+  }
   function mergeOpenTrades(rows) {
     var seen = {};
     var merged = [];
@@ -83,6 +106,18 @@
   var overlay = document.getElementById('axmTvOverlay');
   function openTV(ticker) {
     document.getElementById('axmTvLabel').textContent = ticker;
+    var head = document.querySelector('.axm-tv-head');
+    var dashLink = document.getElementById('axmDashDeepDive');
+    if (head && !dashLink) {
+      dashLink = document.createElement('a');
+      dashLink.id = 'axmDashDeepDive';
+      dashLink.target = '_blank';
+      dashLink.rel = 'noopener';
+      dashLink.textContent = 'Open AlphaX Deep Dive';
+      dashLink.style.cssText = 'margin-left:auto;margin-right:10px;color:var(--cyan);font-size:0.72rem;font-family:var(--font-display);font-weight:700;letter-spacing:1px;text-transform:uppercase;text-decoration:none;';
+      head.insertBefore(dashLink, document.getElementById('axmTvClose'));
+    }
+    if (dashLink) dashLink.href = alphaTickerUrl(ticker);
     overlay.classList.add('active');
     document.body.style.overflow = 'hidden';
     var box = document.getElementById('axmTvChart');
@@ -263,7 +298,9 @@
     el.innerHTML = rows.map(function(r) {
       var st = (r.status || '').toLowerCase();
       var stCls = st.indexOf('open') >= 0 ? 'axm-status-open' : st.indexOf('close') >= 0 ? 'axm-status-closed' : st.indexOf('watch') >= 0 ? 'axm-status-watching' : '';
-      return '<tr><td><strong style="color:var(--text-bright);">'+esc(r.ticker)+'</strong></td><td>'+esc(r.structure)+'</td><td>'+esc(r.entry)+'</td><td>'+esc(r.stop)+'</td><td>'+esc(r.target)+'</td><td class="'+stCls+'">'+esc(r.status)+'</td></tr>';
+      var optionUrl = yahooOptionUrl(r);
+      var structure = optionUrl ? '<a href="'+esc(optionUrl)+'" target="_blank" rel="noopener" style="color:var(--text-bright);text-decoration:none;">'+esc(r.structure)+'</a>' : esc(r.structure);
+      return '<tr><td><a href="#" class="axm-wl-ticker" data-ticker="'+esc(r.ticker)+'">'+esc(r.ticker)+'</a></td><td>'+structure+'</td><td>'+esc(r.entry)+'</td><td>'+esc(r.stop)+'</td><td>'+esc(r.target)+'</td><td class="'+stCls+'">'+esc(r.status)+'</td></tr>';
     }).join('');
   }
 

@@ -205173,6 +205173,13 @@ select.date-picker option {
     }
   });
 
+  const deepDiveTickerParam = new URLSearchParams(window.location.search).get('ticker');
+  if (deepDiveTickerParam) {
+    setTimeout(function() {
+      openDeepDive(deepDiveTickerParam.toUpperCase());
+    }, 500);
+  }
+
   // =====================================================================
   // AUTO-REFRESH (every 5 min during market hours)
   // =====================================================================
