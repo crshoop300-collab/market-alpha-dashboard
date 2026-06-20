@@ -9,10 +9,12 @@
   var SHEETS_ID = '1xTebVvCgKAcavMSYzYfg6qCW1xEpwwt0PKhGWjh764U';
   var DESK_NOTE_CSV = 'https://docs.google.com/spreadsheets/d/' + SHEETS_ID + '/gviz/tq?tqx=out:csv&sheet=Sheet1';
   var PORTFOLIO_CSV = 'https://docs.google.com/spreadsheets/d/' + SHEETS_ID + '/gviz/tq?tqx=out:csv&sheet=Portfolio';
+  var CLOSED_CSV = 'https://docs.google.com/spreadsheets/d/' + SHEETS_ID + '/gviz/tq?tqx=out:csv&sheet=Closed';
 
-  var FALLBACK_DESK_NOTE = "This week we're watching where size is pressing into tech and financials; keep an eye on skew and term structure before sizing up.";
+  var FALLBACK_DESK_NOTE = "Flow is updating from the AlphaX dashboard; keep the current book tight around documented support, resistance, and buy-up-to levels.";
   var FALLBACK_PORTFOLIO = [
-    { ticker: 'AAPL', structure: 'Call spread', entry: 'x\u2013y', stop: 'below z', target: 't1 / t2', status: 'Open' }
+    { ticker: 'LYV', structure: 'Sep 18 2026 $170 Call (BTO)', entry: '$15.05 - $16.50', stop: '', target: '$30.00', status: 'Open 5/14/26' },
+    { ticker: 'AMZN', structure: 'Sep 18 2026 $250 Call (BTO) - AMZN260918C00250000', entry: '$12.90 - $13.50', stop: 'Watch $235 stock support', target: '$25.00', status: 'Open 6/18/26' }
   ];
 
   // ── HELPERS ─────────────────────────────────────────────────────
@@ -27,6 +29,34 @@
   function fmtDate(d) {
     try { return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}); }
     catch(e){ return d; }
+  }
+  function fmtShortDate(d) {
+    try { return new Date(d).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'}); }
+    catch(e){ return d || ''; }
+  }
+  function setDeskNoteDate() {
+    var label = document.querySelector('#axmDeskNote strong');
+    if (label) label.textContent = 'Desk Note ' + new Date().toLocaleDateString('en-US',{month:'numeric',day:'numeric'}) + ':';
+  }
+  function tradeKey(t) {
+    return String((t && (t.optionSymbol || t.ticker || t.structure)) || '').toUpperCase();
+  }
+  function mergeOpenTrades(rows) {
+    var seen = {};
+    var merged = [];
+    FALLBACK_PORTFOLIO.forEach(function(seed) {
+      var key = tradeKey(seed);
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      merged.push(seed);
+    });
+    (rows || []).forEach(function(row) {
+      var key = tradeKey(row);
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      merged.push(row);
+    });
+    return merged;
   }
   function parseCSV(text) {
     var lines = text.trim().split('\n');
@@ -163,6 +193,7 @@
 
   // ── LOAD DESK NOTE FROM GOOGLE SHEET ────────────────────────────
   function loadDeskNote() {
+    setDeskNoteDate();
     var el = document.getElementById('axmDeskNoteText');
     return fetch(DESK_NOTE_CSV).then(function(resp) {
       if (!resp.ok) throw new Error(resp.status);
@@ -181,6 +212,22 @@
   }
 
   // ── LOAD PORTFOLIO FROM GOOGLE SHEET ────────────────────────────
+  function renderDeskNoteFromDash(data) {
+    setDeskNoteDate();
+    var el = document.getElementById('axmDeskNoteText');
+    if (!el || !data || !data.d || !data.d.dashboard) return;
+    var snap = data.d.dashboard.market_snapshot || {};
+    var recap = data.d.dashboard.daily_recap || {};
+    var flow = data.d.dashboard.options_flow || [];
+    var sectors = (data.d.sector_heatmap || []).slice();
+    sectors.sort(function(a,b){ return ((b.call_premium||0)+(b.put_premium||0)) - ((a.call_premium||0)+(a.put_premium||0)); });
+    var topSectors = sectors.slice(0,2).map(function(s){ return s.sector; }).join(' and ') || 'the highest-volume groups';
+    var totalPrem = flow.reduce(function(s,f){ return s + (f.premium_num || 0); }, 0);
+    var bias = recap.sentiment_trend || (snap.sentiment_pct >= 55 ? 'leaning bullish' : snap.sentiment_pct <= 45 ? 'defensive' : 'balanced');
+    var pcrText = snap.put_call_ratio !== undefined && snap.put_call_ratio !== null ? Number(snap.put_call_ratio).toFixed(2) : '--';
+    el.textContent = 'Flow is ' + bias + ' with ' + (snap.sentiment_pct || '--') + '% sentiment, a ' + pcrText + ' put/call ratio, and roughly ' + fmtNum(totalPrem) + ' in tracked premium; focus remains on ' + topSectors + '. Active AlphaX structures to monitor: LYV and AMZN.';
+  }
+
   function loadPortfolio() {
     return fetch(PORTFOLIO_CSV).then(function(resp) {
       if (!resp.ok) throw new Error(resp.status);
@@ -198,12 +245,12 @@
             status: r['Status'] || r['status'] || ''
           };
         }).filter(function(r){ return r.ticker; });
-        if (mapped.length) { renderPortfolio(mapped); return; }
+        if (mapped.length) { renderPortfolio(mergeOpenTrades(mapped)); return; }
       }
       renderPortfolio(FALLBACK_PORTFOLIO);
     }).catch(function(e) {
       console.error('AXM portfolio:', e);
-      renderPortfolio(FALLBACK_PORTFOLIO);
+      renderPortfolio(mergeOpenTrades([]));
     });
   }
 
@@ -221,6 +268,36 @@
   }
 
   // ── LOAD TRADE ALERTS (WordPress) ───────────────────────────────
+  function loadClosedTrades() {
+    return fetch(CLOSED_CSV).then(function(resp) {
+      if (!resp.ok) throw new Error(resp.status);
+      return resp.text();
+    }).then(function(text) {
+      var rows = parseCSV(text).map(function(r) {
+        return {
+          ticker: r['Ticker'] || r['ticker'] || '',
+          structure: r['Structure'] || r['structure'] || '',
+          entry: r['Entry'] || r['Entry Price'] || r['entry'] || '',
+          exit: r['Exit'] || r['Exit Price'] || r['exit'] || '',
+          closed: r['Closed'] || r['closed'] || '',
+          ret: r['Return'] || r['Est. Gain'] || r['return'] || ''
+        };
+      }).filter(function(r){ return r.ticker; });
+      renderClosedTrades(rows);
+    }).catch(function(e) {
+      console.error('AXM closed trades:', e);
+    });
+  }
+
+  function renderClosedTrades(rows) {
+    var el = document.getElementById('axmClosedBody');
+    if (!el || !rows || !rows.length) return;
+    el.innerHTML = rows.map(function(r) {
+      var retCls = /^-/.test(r.ret) || /loss/i.test(r.ret) ? 'axm-return-loss' : 'axm-return-win';
+      return '<tr><td><a href="#" class="axm-wl-ticker" data-ticker="'+esc(r.ticker)+'">'+esc(r.ticker)+'</a></td><td>'+esc(r.structure)+'</td><td>'+esc(r.entry || '--')+'</td><td>'+esc(r.exit || '--')+'</td><td>'+esc(r.closed || '--')+'</td><td class="'+retCls+'">'+esc(r.ret || '--')+'</td></tr>';
+    }).join('');
+  }
+
   function loadAlerts() {
     var el = document.getElementById('axmAlertsList');
     return fetch(WP_API_BASE + '/posts?categories=' + ALERTS_CATS + '&per_page=8&orderby=date&order=desc&_fields=id,title,excerpt,date,link').then(function(resp) {
@@ -265,15 +342,20 @@
   }
 
   // ── INIT ────────────────────────────────────────────────────────
+  setDeskNoteDate();
+  renderPortfolio(FALLBACK_PORTFOLIO);
+
   Promise.all([
     fetchDash(),
     loadAlerts(),
     loadDeskNote(),
     loadPortfolio(),
+    loadClosedTrades(),
     loadResearch()
   ]).then(function(results) {
     var dashData = results[0];
     if (dashData) {
+      renderDeskNoteFromDash(dashData);
       renderSnap(dashData);
       renderWatchlist(dashData);
     } else {
