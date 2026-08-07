@@ -348244,10 +348244,16 @@ select.date-picker option {
       renderFlowTable(data.options_flow || []);
       renderRecap(data.daily_recap);
 
-      document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const lastUpdate = document.getElementById('lastUpdate');
+      if (lastUpdate) {
+        lastUpdate.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      }
     } catch (err) {
       console.error('Dashboard load error:', err);
-      document.getElementById('lastUpdate').textContent = 'Error loading data';
+      const lastUpdate = document.getElementById('lastUpdate');
+      if (lastUpdate) {
+        lastUpdate.textContent = 'Error loading data';
+      }
     }
   }
 
@@ -348700,7 +348706,48 @@ select.date-picker option {
   // TICKER DEEP DIVE
   // =====================================================================
   let currentDeepDiveTicker = null;
-  let tvScriptLoaded = false;
+  let tvScriptPromise = null;
+
+  function loadTradingViewScript() {
+    if (typeof TradingView !== 'undefined') {
+      return Promise.resolve();
+    }
+    if (tvScriptPromise) {
+      return tvScriptPromise;
+    }
+
+    tvScriptPromise = new Promise(function(resolve, reject) {
+      const existing = document.querySelector('script[src="https://s3.tradingview.com/tv.js"]');
+      if (existing) {
+        existing.remove();
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://s3.tradingview.com/tv.js';
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    }).then(function() {
+      if (typeof TradingView === 'undefined') {
+        throw new Error('TradingView script loaded without widget API');
+      }
+    }).catch(function(err) {
+      tvScriptPromise = null;
+      throw err;
+    });
+
+    return tvScriptPromise;
+  }
+
+  function renderTradingViewFallback(container, ticker) {
+    container.innerHTML = `
+      <div class="empty-state" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;">
+        <div>TradingView chart could not load here.</div>
+        <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(ticker)}" target="_blank" rel="noopener" class="btn btn-primary">Open ${escHtml(ticker)} Chart</a>
+      </div>
+    `;
+  }
 
   function openDeepDive(ticker) {
     currentDeepDiveTicker = ticker;
@@ -348806,40 +348853,40 @@ select.date-picker option {
 
     function initTVWidget() {
       if (typeof TradingView !== 'undefined') {
-        new TradingView.widget({
-          "autosize": true,
-          "symbol": ticker,
-          "interval": "D",
-          "timezone": "America/New_York",
-          "theme": "dark",
-          "style": "1",
-          "locale": "en",
-          "toolbar_bg": "#101517",
-          "enable_publishing": false,
-          "hide_top_toolbar": false,
-          "hide_legend": false,
-          "save_image": false,
-          "container_id": "tradingview_widget",
-          "backgroundColor": "#101517",
-          "gridColor": "rgba(255,255,255,0.04)",
-          "studies": ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
-          "width": "100%",
-          "height": 500
-        });
+        try {
+          new TradingView.widget({
+            "autosize": true,
+            "symbol": ticker,
+            "interval": "D",
+            "timezone": "America/New_York",
+            "theme": "dark",
+            "style": "1",
+            "locale": "en",
+            "toolbar_bg": "#101517",
+            "enable_publishing": false,
+            "hide_top_toolbar": false,
+            "hide_legend": false,
+            "save_image": false,
+            "container_id": "tradingview_widget",
+            "backgroundColor": "#101517",
+            "gridColor": "rgba(255,255,255,0.04)",
+            "studies": ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
+            "width": "100%",
+            "height": 500
+          });
+        } catch (err) {
+          console.warn('TradingView widget failed:', err);
+          renderTradingViewFallback(chartContainer, ticker);
+        }
+      } else {
+        renderTradingViewFallback(chartContainer, ticker);
       }
     }
 
-    if (tvScriptLoaded) {
-      initTVWidget();
-    } else {
-      const script = document.createElement('script');
-      script.src = 'https://s3.tradingview.com/tv.js';
-      script.onload = function() {
-        tvScriptLoaded = true;
-        initTVWidget();
-      };
-      document.head.appendChild(script);
-    }
+    loadTradingViewScript().then(initTVWidget).catch(function(err) {
+      console.warn('TradingView script failed:', err);
+      renderTradingViewFallback(chartContainer, ticker);
+    });
   }
 
   function closeDeepDive() {
