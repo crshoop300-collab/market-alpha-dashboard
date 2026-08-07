@@ -104,29 +104,21 @@
   }
 
   // ── TRADINGVIEW POPUP ───────────────────────────────────────────
-  var tvPromise = null;
   var overlay = document.getElementById('axmTvOverlay');
-  function loadTVScript() {
-    if (typeof TradingView !== 'undefined') return Promise.resolve();
-    if (tvPromise) return tvPromise;
-    tvPromise = new Promise(function(resolve, reject) {
-      var existing = document.querySelector('script[src="https://s3.tradingview.com/tv.js"]');
-      if (existing) {
-        existing.remove();
-      }
-      var s = document.createElement('script');
-      s.src = 'https://s3.tradingview.com/tv.js';
-      s.async = true;
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    }).then(function() {
-      if (typeof TradingView === 'undefined') throw new Error('TradingView script loaded without widget API');
-    }).catch(function(err) {
-      tvPromise = null;
-      throw err;
-    });
-    return tvPromise;
+  var TV_SYMBOLS = {
+    SPY:'AMEX:SPY', IWM:'AMEX:IWM', DIA:'AMEX:DIA', GLD:'AMEX:GLD', SLV:'AMEX:SLV',
+    QQQ:'NASDAQ:QQQ', TQQQ:'NASDAQ:TQQQ', SQQQ:'NASDAQ:SQQQ', SOXX:'NASDAQ:SOXX', SMH:'NASDAQ:SMH',
+    AAPL:'NASDAQ:AAPL', MSFT:'NASDAQ:MSFT', NVDA:'NASDAQ:NVDA', AMZN:'NASDAQ:AMZN', TSLA:'NASDAQ:TSLA',
+    META:'NASDAQ:META', GOOGL:'NASDAQ:GOOGL', GOOG:'NASDAQ:GOOG', NFLX:'NASDAQ:NFLX', AMD:'NASDAQ:AMD',
+    AVGO:'NASDAQ:AVGO', INTC:'NASDAQ:INTC', CSCO:'NASDAQ:CSCO', ADBE:'NASDAQ:ADBE', QCOM:'NASDAQ:QCOM',
+    MU:'NASDAQ:MU', WDC:'NASDAQ:WDC', ALAB:'NASDAQ:ALAB', PLTR:'NASDAQ:PLTR', TSM:'NYSE:TSM',
+    DELL:'NYSE:DELL', IBM:'NYSE:IBM', DIS:'NYSE:DIS', CRM:'NYSE:CRM', U:'NYSE:U', BKNG:'NASDAQ:BKNG'
+  };
+  function tvSymbol(ticker) {
+    var clean = String(ticker || '').toUpperCase().trim().replace(/[^A-Z0-9.:-]/g, '');
+    if (!clean) return 'NASDAQ:NVDA';
+    if (clean.indexOf(':') !== -1) return clean;
+    return TV_SYMBOLS[clean] || clean;
   }
   function openTV(ticker) {
     document.getElementById('axmTvLabel').textContent = ticker;
@@ -145,36 +137,36 @@
     overlay.classList.add('active');
     document.body.style.overflow = 'hidden';
     var box = document.getElementById('axmTvChart');
-    box.innerHTML = '';
-    var w = document.createElement('div');
-    w.id = 'axm_tv_' + Date.now(); w.style.height = '100%';
-    box.appendChild(w);
+    var symbol = tvSymbol(ticker);
     function fallback() {
       box.innerHTML = '<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text);font-family:var(--font-body);text-align:center;padding:24px;">'
         + '<div>TradingView chart could not load here.</div>'
-        + '<a href="https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(ticker) + '" target="_blank" rel="noopener" style="color:var(--cyan);font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:1px;text-decoration:none;">Open ' + esc(ticker) + ' Chart</a>'
+        + '<a href="https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(symbol) + '" target="_blank" rel="noopener" style="color:var(--cyan);font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:1px;text-decoration:none;">Open ' + esc(ticker) + ' Chart</a>'
         + '</div>';
     }
-    function go() {
-      if (typeof TradingView !== 'undefined') {
-        try {
-          new TradingView.widget({ autosize:true, symbol:ticker, interval:'D', timezone:'America/New_York',
-            theme:'dark', style:'1', locale:'en', toolbar_bg:'#101517',
-            enable_publishing:false, hide_top_toolbar:false, hide_legend:false, save_image:false,
-            container_id:w.id, backgroundColor:'#101517', gridColor:'rgba(255,255,255,0.04)',
-            studies:['RSI@tv-basicstudies','MACD@tv-basicstudies'], width:'100%', height:'100%' });
-        } catch (err) {
-          console.warn('TradingView widget failed:', err);
-          fallback();
-        }
-      } else {
-        fallback();
-      }
-    }
-    loadTVScript().then(go).catch(function(err) {
-      console.warn('TradingView script failed:', err);
-      fallback();
+    box.innerHTML = '<div class="tradingview-widget-container" style="height:100%;width:100%;"><div class="tradingview-widget-container__widget" style="height:100%;width:100%;"></div></div>';
+    var script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.async = true;
+    script.textContent = JSON.stringify({
+      autosize:true,
+      symbol:symbol,
+      interval:'D',
+      timezone:'America/New_York',
+      theme:'dark',
+      style:'1',
+      locale:'en',
+      backgroundColor:'#101517',
+      gridColor:'rgba(255,255,255,0.04)',
+      allow_symbol_change:true,
+      calendar:false,
+      hide_side_toolbar:false,
+      support_host:'https://www.tradingview.com'
     });
+    script.onerror = fallback;
+    box.querySelector('.tradingview-widget-container').appendChild(script);
+    window.setTimeout(function(){ if (!box.querySelector('iframe')) fallback(); }, 10000);
   }
   function closeTV() {
     overlay.classList.remove('active');

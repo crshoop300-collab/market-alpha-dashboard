@@ -367362,47 +367362,78 @@ select.date-picker option {
   // TICKER DEEP DIVE
   // =====================================================================
   let currentDeepDiveTicker = null;
-  let tvScriptPromise = null;
 
-  function loadTradingViewScript() {
-    if (typeof TradingView !== 'undefined') {
-      return Promise.resolve();
-    }
-    if (tvScriptPromise) {
-      return tvScriptPromise;
-    }
+  const TV_SYMBOLS = {
+    SPY: 'AMEX:SPY', IWM: 'AMEX:IWM', DIA: 'AMEX:DIA', GLD: 'AMEX:GLD', SLV: 'AMEX:SLV',
+    QQQ: 'NASDAQ:QQQ', TQQQ: 'NASDAQ:TQQQ', SQQQ: 'NASDAQ:SQQQ', SOXX: 'NASDAQ:SOXX', SMH: 'NASDAQ:SMH',
+    AAPL: 'NASDAQ:AAPL', MSFT: 'NASDAQ:MSFT', NVDA: 'NASDAQ:NVDA', AMZN: 'NASDAQ:AMZN', TSLA: 'NASDAQ:TSLA',
+    META: 'NASDAQ:META', GOOGL: 'NASDAQ:GOOGL', GOOG: 'NASDAQ:GOOG', NFLX: 'NASDAQ:NFLX', AMD: 'NASDAQ:AMD',
+    AVGO: 'NASDAQ:AVGO', INTC: 'NASDAQ:INTC', CSCO: 'NASDAQ:CSCO', ADBE: 'NASDAQ:ADBE', QCOM: 'NASDAQ:QCOM',
+    MU: 'NASDAQ:MU', WDC: 'NASDAQ:WDC', ALAB: 'NASDAQ:ALAB', PLTR: 'NASDAQ:PLTR', TSM: 'NYSE:TSM',
+    DELL: 'NYSE:DELL', IBM: 'NYSE:IBM', DIS: 'NYSE:DIS', CRM: 'NYSE:CRM', U: 'NYSE:U', BKNG: 'NASDAQ:BKNG'
+  };
 
-    tvScriptPromise = new Promise(function(resolve, reject) {
-      const existing = document.querySelector('script[src="https://s3.tradingview.com/tv.js"]');
-      if (existing) {
-        existing.remove();
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://s3.tradingview.com/tv.js';
-      script.async = true;
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    }).then(function() {
-      if (typeof TradingView === 'undefined') {
-        throw new Error('TradingView script loaded without widget API');
-      }
-    }).catch(function(err) {
-      tvScriptPromise = null;
-      throw err;
-    });
-
-    return tvScriptPromise;
+  function tradingViewSymbol(ticker) {
+    const clean = String(ticker || '').toUpperCase().trim().replace(/[^A-Z0-9.:-]/g, '');
+    if (!clean) return 'NASDAQ:NVDA';
+    if (clean.includes(':')) return clean;
+    return TV_SYMBOLS[clean] || clean;
   }
 
   function renderTradingViewFallback(container, ticker) {
+    const symbol = tradingViewSymbol(ticker);
     container.innerHTML = `
       <div class="empty-state" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;">
         <div>TradingView chart could not load here.</div>
-        <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(ticker)}" target="_blank" rel="noopener" class="btn btn-primary">Open ${escHtml(ticker)} Chart</a>
+        <a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}" target="_blank" rel="noopener" class="btn btn-primary">Open ${escHtml(ticker)} Chart</a>
       </div>
     `;
+  }
+
+  function renderTradingViewChart(container, ticker) {
+    const symbol = tradingViewSymbol(ticker);
+    container.innerHTML = '';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'tradingview-widget-container';
+    wrap.style.height = '100%';
+    wrap.style.width = '100%';
+
+    const widget = document.createElement('div');
+    widget.className = 'tradingview-widget-container__widget';
+    widget.style.height = '100%';
+    widget.style.width = '100%';
+    wrap.appendChild(widget);
+
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.async = true;
+    script.textContent = JSON.stringify({
+      autosize: true,
+      symbol: symbol,
+      interval: 'D',
+      timezone: 'America/New_York',
+      theme: 'dark',
+      style: '1',
+      locale: 'en',
+      backgroundColor: '#101517',
+      gridColor: 'rgba(255,255,255,0.04)',
+      allow_symbol_change: true,
+      calendar: false,
+      hide_side_toolbar: false,
+      support_host: 'https://www.tradingview.com'
+    });
+    script.onerror = function() { renderTradingViewFallback(container, ticker); };
+
+    container.appendChild(wrap);
+    wrap.appendChild(script);
+
+    window.setTimeout(function() {
+      if (!container.querySelector('iframe')) {
+        renderTradingViewFallback(container, ticker);
+      }
+    }, 10000);
   }
 
   function openDeepDive(ticker) {
@@ -367499,50 +367530,9 @@ select.date-picker option {
       }).join('');
     }
 
-    // TradingView widget
+    // TradingView chart
     const chartContainer = document.getElementById('ddChart');
-    chartContainer.innerHTML = '';
-    const tvWidget = document.createElement('div');
-    tvWidget.id = 'tradingview_widget';
-    tvWidget.style.height = '500px';
-    chartContainer.appendChild(tvWidget);
-
-    function initTVWidget() {
-      if (typeof TradingView !== 'undefined') {
-        try {
-          new TradingView.widget({
-            "autosize": true,
-            "symbol": ticker,
-            "interval": "D",
-            "timezone": "America/New_York",
-            "theme": "dark",
-            "style": "1",
-            "locale": "en",
-            "toolbar_bg": "#101517",
-            "enable_publishing": false,
-            "hide_top_toolbar": false,
-            "hide_legend": false,
-            "save_image": false,
-            "container_id": "tradingview_widget",
-            "backgroundColor": "#101517",
-            "gridColor": "rgba(255,255,255,0.04)",
-            "studies": ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
-            "width": "100%",
-            "height": 500
-          });
-        } catch (err) {
-          console.warn('TradingView widget failed:', err);
-          renderTradingViewFallback(chartContainer, ticker);
-        }
-      } else {
-        renderTradingViewFallback(chartContainer, ticker);
-      }
-    }
-
-    loadTradingViewScript().then(initTVWidget).catch(function(err) {
-      console.warn('TradingView script failed:', err);
-      renderTradingViewFallback(chartContainer, ticker);
-    });
+    renderTradingViewChart(chartContainer, ticker);
   }
 
   function closeDeepDive() {
