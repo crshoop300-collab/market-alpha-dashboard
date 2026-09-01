@@ -11,14 +11,16 @@
   var PORTFOLIO_CSV = 'https://docs.google.com/spreadsheets/d/' + SHEETS_ID + '/gviz/tq?tqx=out:csv&sheet=Portfolio';
   var CLOSED_CSV = 'https://docs.google.com/spreadsheets/d/' + SHEETS_ID + '/gviz/tq?tqx=out:csv&sheet=Closed';
 
-  var FALLBACK_DESK_NOTE = "Flow is updating from the AlphaX dashboard; keep the current book tight around documented support, resistance, and buy-up-to levels across LYV, AMZN, SMH, CDE, VSAT, and HOOD.";
+  var FALLBACK_DESK_NOTE = "Flow is updating from the AlphaX dashboard; keep the current book tight around documented support, resistance, and buy-up-to levels across LYV, AMZN, CDE, VSAT, and HOOD.";
   var FALLBACK_PORTFOLIO = [
     { ticker: 'LYV', structure: 'Sep 18 2026 $170 Call (BTO)', entry: '$15.05 - $16.50', stop: '', target: '$30.00', status: 'Open 5/14/26' },
     { ticker: 'AMZN', structure: 'Sep 18 2026 $250 Call (BTO) - AMZN260918C00250000', entry: '$12.90 - $13.50', stop: 'Watch $235 stock support', target: '$25.00', status: 'Open 6/18/26' },
-    { ticker: 'SMH', structure: 'Aug 21 2026 $625 Put (BTO) - SMH260821P00625000', entry: '$41.00 - $45.00', stop: 'Support around $600; resistance just above $660', target: '$90.00', status: 'Open 7/1/26' },
     { ticker: 'CDE', structure: 'Nov 20 2026 $15 Call (BTO) - CDE261120C00015000', entry: '$2.47 - $3.00', stop: 'Tight downtrend channel; watch for breakout confirmation after August earnings', target: '$6.00', status: 'Open 7/17/26' },
     { ticker: 'VSAT', structure: 'Dec 18 2026 $85 Call (BTO) - VSAT261218C00085000', entry: '$18.66 - $22.50', stop: 'Resistance at $90; rising support levels - breakout candidate', target: '$45.00', status: 'Open 8/7/26' },
     { ticker: 'HOOD', structure: 'Oct 16 2026 $90 Put (BTO) - HOOD261016P00090000', entry: '$5.50 - $6.50', stop: 'Resistance at $120; downside target/support at $60', target: '$10.00', status: 'Open 8/17/26' }
+  ];
+  var FALLBACK_CLOSED = [
+    { ticker: 'SMH', structure: 'Aug 21 2026 $625 Put (BTO) - SMH260821P00625000', entry: '$41.00 - $45.00', exit: '$64.58', closed: '8/21/26', ret: '+43%' }
   ];
 
   // ── HELPERS ─────────────────────────────────────────────────────
@@ -70,18 +72,33 @@
   }
   function mergeOpenTrades(rows) {
     var seen = {};
+    var closed = {};
     var merged = [];
+    FALLBACK_CLOSED.forEach(function(trade) {
+      closed[tradeKey(trade)] = true;
+    });
     FALLBACK_PORTFOLIO.forEach(function(seed) {
       var key = tradeKey(seed);
-      if (!key || seen[key]) return;
+      if (!key || seen[key] || closed[key]) return;
       seen[key] = true;
       merged.push(seed);
     });
     (rows || []).forEach(function(row) {
       var key = tradeKey(row);
-      if (!key || seen[key]) return;
+      if (!key || seen[key] || closed[key]) return;
       seen[key] = true;
       merged.push(row);
+    });
+    return merged;
+  }
+  function mergeClosedTrades(rows) {
+    var seen = {};
+    var merged = [];
+    FALLBACK_CLOSED.concat(rows || []).forEach(function(trade) {
+      var key = tradeKey(trade);
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      merged.push(trade);
     });
     return merged;
   }
@@ -290,7 +307,7 @@
     var totalPrem = flow.reduce(function(s,f){ return s + (f.premium_num || 0); }, 0);
     var bias = recap.sentiment_trend || (snap.sentiment_pct >= 55 ? 'leaning bullish' : snap.sentiment_pct <= 45 ? 'defensive' : 'balanced');
     var pcrText = snap.put_call_ratio !== undefined && snap.put_call_ratio !== null ? Number(snap.put_call_ratio).toFixed(2) : '--';
-    el.textContent = 'Flow is ' + bias + ' with ' + (snap.sentiment_pct || '--') + '% sentiment, a ' + pcrText + ' put/call ratio, and roughly ' + fmtNum(totalPrem) + ' in tracked premium; focus remains on ' + topSectors + '. Active AlphaX structures to monitor: LYV, AMZN, SMH, CDE, VSAT, and HOOD.';
+    el.textContent = 'Flow is ' + bias + ' with ' + (snap.sentiment_pct || '--') + '% sentiment, a ' + pcrText + ' put/call ratio, and roughly ' + fmtNum(totalPrem) + ' in tracked premium; focus remains on ' + topSectors + '. Active AlphaX structures to monitor: LYV, AMZN, CDE, VSAT, and HOOD.';
   }
 
   function loadPortfolio() {
@@ -336,6 +353,7 @@
 
   // ── LOAD TRADE ALERTS (WordPress) ───────────────────────────────
   function loadClosedTrades() {
+    renderClosedTrades(FALLBACK_CLOSED);
     return fetch(CLOSED_CSV).then(function(resp) {
       if (!resp.ok) throw new Error(resp.status);
       return resp.text();
@@ -350,9 +368,10 @@
           ret: r['Return'] || r['Est. Gain'] || r['return'] || ''
         };
       }).filter(function(r){ return r.ticker; });
-      renderClosedTrades(rows);
+      renderClosedTrades(mergeClosedTrades(rows));
     }).catch(function(e) {
       console.error('AXM closed trades:', e);
+      renderClosedTrades(FALLBACK_CLOSED);
     });
   }
 
