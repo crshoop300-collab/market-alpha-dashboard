@@ -11,16 +11,16 @@
   var PORTFOLIO_CSV = 'https://docs.google.com/spreadsheets/d/' + SHEETS_ID + '/gviz/tq?tqx=out:csv&sheet=Portfolio';
   var CLOSED_CSV = 'https://docs.google.com/spreadsheets/d/' + SHEETS_ID + '/gviz/tq?tqx=out:csv&sheet=Closed';
 
-  var FALLBACK_DESK_NOTE = "Flow is updating from the AlphaX dashboard; keep the current book tight around documented support, resistance, and buy-up-to levels across CDE, VSAT, HOOD, FSLR, CRWV, and IREN.";
+  var FALLBACK_DESK_NOTE = "Flow is updating from the AlphaX dashboard; keep the current book tight around documented support, resistance, and buy-up-to levels across CDE, VSAT, CRWV, and IREN.";
   var FALLBACK_PORTFOLIO = [
     { ticker: 'CDE', structure: 'Nov 20 2026 $15 Call (BTO) - CDE261120C00015000', entry: '$2.47 - $3.00', stop: 'Tight downtrend channel; watch for breakout confirmation after August earnings', target: '$6.00', status: 'Open 7/17/26' },
     { ticker: 'VSAT', structure: 'Dec 18 2026 $85 Call (BTO) - VSAT261218C00085000', entry: '$18.66 - $22.50', stop: 'Resistance at $90; rising support levels - breakout candidate', target: '$45.00', status: 'Open 8/7/26' },
-    { ticker: 'HOOD', structure: 'Oct 16 2026 $90 Put (BTO) - HOOD261016P00090000', entry: '$5.50 - $6.50', stop: 'Resistance at $120; downside target/support at $60', target: '$10.00', status: 'Open 8/17/26' },
-    { ticker: 'FSLR', structure: 'Oct 16 2026 $210 Call (BTO) - FSLR261016C00210000', entry: '$9.90', stop: 'Buy up to $12.50; stock support at $200 and first resistance at $250', target: '$25.00', status: 'Open 9/1/26' },
     { ticker: 'CRWV', structure: 'Nov 20 2026 $95 Call (BTO) - CRWV261120C00095000', entry: '$9.19', stop: 'Buy up to $10.00; stock support at $80 and trading at trendline resistance', target: '$20.00', status: 'Open 10/2/26' },
     { ticker: 'IREN', structure: 'Jan 15 2027 $40 Call (BTO) - IREN270115C00040000', entry: '$4.54', stop: 'Buy up to $5.50; stock support at $32 with declining resistance', target: '$10.00', status: 'Open 10/9/26' }
   ];
   var FALLBACK_CLOSED = [
+    { ticker: 'HOOD', structure: 'Oct 16 2026 $90 Put (BTO) - HOOD261016P00090000', entry: '$5.50 - $6.50', exit: '$0.00', closed: '10/16/26', ret: '-100%' },
+    { ticker: 'FSLR', structure: 'Oct 16 2026 $210 Call (BTO) - FSLR261016C00210000', entry: '$9.90', exit: '$0.00', closed: '10/16/26', ret: '-100%' },
     { ticker: 'SMH', structure: 'Aug 21 2026 $625 Put (BTO) - SMH260821P00625000', entry: '$41.00 - $45.00', exit: '$64.58', closed: '8/21/26', ret: '+43%' },
     { ticker: 'AMZN', structure: 'Sep 18 2026 $250 Call (BTO) - AMZN260918C00250000', entry: '$12.90 - $13.50', exit: '$3.71', closed: '9/18/26', ret: '-71% to -73%' },
     { ticker: 'LYV', structure: 'Sep 18 2026 $170 Call (BTO)', entry: '$15.05 - $16.50', exit: '$0.00', closed: '9/18/26', ret: '-100%' }
@@ -310,7 +310,7 @@
     var totalPrem = flow.reduce(function(s,f){ return s + (f.premium_num || 0); }, 0);
     var bias = recap.sentiment_trend || (snap.sentiment_pct >= 55 ? 'leaning bullish' : snap.sentiment_pct <= 45 ? 'defensive' : 'balanced');
     var pcrText = snap.put_call_ratio !== undefined && snap.put_call_ratio !== null ? Number(snap.put_call_ratio).toFixed(2) : '--';
-    el.textContent = 'Flow is ' + bias + ' with ' + (snap.sentiment_pct || '--') + '% sentiment, a ' + pcrText + ' put/call ratio, and roughly ' + fmtNum(totalPrem) + ' in tracked premium; focus remains on ' + topSectors + '. Active AlphaX structures to monitor: CDE, VSAT, HOOD, FSLR, CRWV, and IREN.';
+    el.textContent = 'Flow is ' + bias + ' with ' + (snap.sentiment_pct || '--') + '% sentiment, a ' + pcrText + ' put/call ratio, and roughly ' + fmtNum(totalPrem) + ' in tracked premium; focus remains on ' + topSectors + '. Active AlphaX structures to monitor: CDE, VSAT, CRWV, and IREN.';
   }
 
   function loadPortfolio() {
