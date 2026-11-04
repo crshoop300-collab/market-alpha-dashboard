@@ -4,9 +4,19 @@ import path from 'node:path';
 const INDEX_PATH = path.resolve('index.html');
 const IMPORTED_AT = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-const csvFiles = process.argv.slice(2);
+const args = process.argv.slice(2);
+const selectedDates = new Set((args.find((arg) => arg.startsWith('--dates='))?.slice(8) || '').split(',').filter(Boolean));
+const timestampZone = args.find((arg) => arg.startsWith('--timestamp-zone='))?.split('=')[1];
+for (const arg of args.filter((arg) => arg.startsWith('--'))) {
+  if (!arg.startsWith('--dates=') && !arg.startsWith('--timestamp-zone=')) throw new Error(`Unknown option: ${arg}`);
+}
+for (const date of selectedDates) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) throw new Error(`Invalid date: ${date}`);
+}
+if (timestampZone && !['UTC', 'America/New_York'].includes(timestampZone)) throw new Error('Unsupported timestamp zone');
+const csvFiles = args.filter((arg) => !arg.startsWith('--'));
 if (!csvFiles.length) {
-  console.error('Usage: node scripts/import_option_exports.mjs <option_export.csv> [...]');
+  console.error('Usage: node scripts/import_option_exports.mjs [--dates=YYYY-MM-DD,...] [--timestamp-zone=UTC|America/New_York] <export.csv> [...]');
   process.exit(1);
 }
 
@@ -109,6 +119,7 @@ function isPut(cp) {
 }
 
 function isOtm(trade) {
+  if (!Number.isFinite(trade.spot) || trade.spot <= 0) return false;
   if (isCall(trade.call_put)) return trade.strike > trade.spot;
   if (isPut(trade.call_put)) return trade.strike < trade.spot;
   return false;
@@ -148,6 +159,38 @@ function normalizeSector(sector) {
     Materials: 'MATR',
   };
   return map[s] || s || 'OTHER';
+}
+
+// Xynth exports can span many sessions. Require explicit dates and an explicit
+// timestamp interpretation, and never overwrite an existing dashboard date.
+function normalizeXynth(row) {
+  if (!selectedDates.size || !timestampZone) throw new Error('Xynth requires --dates and --timestamp-zone');
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(row.timestamp)) throw new Error(`Invalid Xynth timestamp: ${row.timestamp}`);
+  const instant = new Date(row.timestamp.replace(' ', 'T') + 'Z');
+  if (!Number.isFinite(instant.getTime()) || instant.toISOString().slice(0, 19).replace('T', ' ') !== row.timestamp) throw new Error('Invalid Xynth timestamp');
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: timestampZone === 'UTC' ? 'America/New_York' : 'UTC',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).formatToParts(instant).map(({ type, value }) => [type, value]));
+  const date = `${parts.year}-${parts.month}-${parts.day}`;
+  if (!selectedDates.has(date)) return null;
+  if (!['call', 'put'].includes(row.type) || !row.ticker || !['true', 'false'].includes(row.is_sweep) || !['true', 'false'].includes(row.unusual)) throw new Error('Invalid Xynth contract or flags');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(row.expiry) || !Number.isFinite(Date.parse(row.expiry)) || new Date(row.expiry).toISOString().slice(0, 10) !== row.expiry) throw new Error('Invalid Xynth expiry');
+  for (const key of ['strike', 'size', 'price', 'premium', 'volume', 'open_interest']) {
+    if (row[key] === '' || !Number.isFinite(Number(row[key])) || Number(row[key]) < 0) throw new Error(`Invalid Xynth ${key}`);
+  }
+  if (row.underlying_price !== '' && (!Number.isFinite(Number(row.underlying_price)) || Number(row.underlying_price) <= 0)) throw new Error('Invalid Xynth underlying price');
+  const tags = row.tags.split('|');
+  const sectors = { 'Consumer Cyclical': 'Discretionary', 'Consumer Defensive': 'Staples', 'Basic Materials': 'Materials', 'Financial Services': 'Financials', 'Communication Services': 'COMM', Utilities: 'UTIL', 'Real Estate': 'REAL' };
+  return {
+    Date: date, Time: `${parts.hour}:${parts.minute}:${parts.second}`, Ticker: row.ticker,
+    Expiry: row.expiry, Strike: row.strike, 'C/P': row.type === 'call' ? 'CALLS' : 'PUTS',
+    Spot: row.underlying_price, Qty: row.size, Price: row.price,
+    Type: row.is_sweep === 'true' ? 'SWEEP' : row.is_floor === 'true' ? 'FLOOR' : 'TRADE',
+    Volume: row.volume, OI: row.open_interest, Premium: row.premium,
+    Sector: tags.includes('etf') ? 'ETF/ETN' : tags.includes('index') ? 'INDEX' : sectors[row.sector] || row.sector,
+    Unusual: row.unusual, Source: 'Xynth', SourceTimestamp: row.timestamp,
+  };
 }
 
 function groupByTicker(flow, sideFilter) {
@@ -361,7 +404,7 @@ function buildDashboard(date, rows, startId) {
         expiry: isoDate(row.Expiry),
         strike: Number(row.Strike),
         call_put: row['C/P'],
-        spot: Number(row.Spot),
+        spot: row.Source === 'Xynth' && row.Spot === '' ? null : Number(row.Spot),
         quantity: Number(row.Qty) || 0,
         price: Number(row.Price) || 0,
         type: String(row.Type || '').trim().toUpperCase(),
@@ -374,6 +417,7 @@ function buildDashboard(date, rows, startId) {
         is_golden: 0,
         unusual: String(row.Unusual || '').toUpperCase() === 'TRUE',
         created_at: IMPORTED_AT,
+        ...(row.Source === 'Xynth' ? { source: 'Xynth', source_timestamp: row.SourceTimestamp, source_timestamp_zone: timestampZone } : {}),
       };
       trade.is_golden = isAlpha(trade) ? 1 : 0;
       trade.algo_score = algoScore(trade);
@@ -493,16 +537,41 @@ const embedded = extractEmbedded(html);
 const embeddedData = embedded.data;
 let nextId = maxTradeId(embeddedData) + 1;
 const importedDates = [];
+const pending = new Map();
 
 for (const file of csvFiles) {
   const abs = path.resolve(file);
-  const rows = parseCsv(fs.readFileSync(abs, 'utf8'));
+  let rows = parseCsv(fs.readFileSync(abs, 'utf8'));
   if (!rows.length) {
     console.warn(`Skipped empty CSV: ${file}`);
     continue;
   }
-  const date = isoDate(rows[0].Date);
-  embeddedData.data[date] = buildDashboard(date, rows, nextId);
+  const xynth = Object.hasOwn(rows[0], 'timestamp') && Object.hasOwn(rows[0], 'is_sweep');
+  if (xynth) rows = rows.map(normalizeXynth).filter(Boolean);
+  else if (!Object.hasOwn(rows[0], 'Date') || !Object.hasOwn(rows[0], 'C/P')) throw new Error(`Unrecognized CSV format: ${file}`);
+  for (const row of rows) {
+    const date = isoDate(row.Date);
+    if (selectedDates.size && !selectedDates.has(date)) continue;
+    if (xynth && embeddedData.data[date]) throw new Error(`Xynth import refused to overwrite existing date ${date}`);
+    const item = pending.get(date) || { rows: [], xynth };
+    if (item.xynth !== xynth) throw new Error(`Cannot mix sources for ${date}`);
+    item.rows.push(row);
+    pending.set(date, item);
+  }
+}
+
+for (const date of selectedDates) {
+  if (!pending.has(date)) throw new Error(`No records for requested date ${date}; no changes written`);
+}
+if (!pending.size) throw new Error('No records selected; no changes written');
+for (const [date, { rows, xynth }] of pending) {
+  const result = buildDashboard(date, rows, nextId);
+  if (xynth) {
+    const scope = rows.every((row) => row.Type === 'SWEEP') ? 'sweep export' : 'filtered flow export';
+    result.dashboard.source = { provider: 'Xynth', scope, timestamp_zone: timestampZone, display_timezone: 'America/New_York' };
+    result.dashboard.daily_recap.summary = `Xynth ${scope} only. ` + result.dashboard.daily_recap.summary;
+  }
+  embeddedData.data[date] = result;
   nextId += rows.length;
   importedDates.push(date);
 }
