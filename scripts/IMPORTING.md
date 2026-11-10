@@ -41,3 +41,30 @@ Run importer regression checks with:
 ```powershell
 node --test scripts/import_option_exports.test.mjs
 ```
+
+## Tradytics
+
+Tradytics exports have a time but no trade date. Supply exactly one trading date
+and the timezone of `time_local`:
+
+```powershell
+npm run import:options -- --dates=2026-11-06 --timestamp-zone=America/New_York "path/to/tradytics-flow-2026-11-06 (1).csv"
+```
+
+The initial November 6 import uses the revised `(1)` export only. The date is
+taken from the filename and explicitly supplied; local times are interpreted as
+Eastern. These are import assumptions, not timezone/date metadata in the CSV.
+Existing dates cannot be overwritten. Alpha thresholds and call/put sentiment
+remain unchanged. SINGLE, BLOCK, SPLIT and SWEEP remain distinct labels.
+
+All source rows are retained, including exact repeats: without execution IDs we
+cannot determine whether identical rows are duplicated exports or distinct fills.
+The recap discloses repeat counts and that export totals include them. Per-row
+`source_identical_row_count` and dashboard source metadata record this policy.
+Never combine overlapping downloads unless intentional; totals count every row.
+
+Daily volume and the unusual flag are unavailable (`null`), not zero or false.
+Sector labels reuse the latest known historical ticker mapping with its source
+date recorded; unmatched tickers remain OTHER. The original historical snapshots
+are never regenerated. Side, trade condition and events are preserved as metadata;
+they do not silently change the existing Alpha criteria or sentiment calculation.

@@ -193,6 +193,29 @@ function normalizeXynth(row) {
   };
 }
 
+function normalizeTradytics(row, sectors) {
+  if (selectedDates.size !== 1 || !timestampZone) throw new Error('Tradytics requires exactly one --dates value and --timestamp-zone');
+  if (!['single', 'sweep', 'split', 'block'].includes(row.order)) throw new Error(`Invalid Tradytics order: ${row.order}`);
+  if (!row.spot) throw new Error('Tradytics underlying price is required');
+  const date = [...selectedDates][0];
+  // Reuse date, time, numeric and contract validation, without treating an
+  // absent volume or unusual flag as reported zero/false data.
+  const mapped = normalizeXynth({
+    timestamp: `${date} ${row.time_local}`, ticker: row.symbol,
+    type: String(row.type).toLowerCase(), strike: row.strike, expiry: row.expiry,
+    underlying_price: row.spot, size: row.size, price: row.price, premium: row.premium,
+    volume: '0', open_interest: row.open_interest,
+    is_sweep: String(row.order === 'sweep'), is_floor: 'false', unusual: 'false',
+    tags: '', sector: sectors.get(row.symbol)?.sector || 'OTHER',
+  });
+  if (!mapped) throw new Error('Tradytics timestamp falls outside the selected trading date');
+  return { ...mapped, Type: row.order.toUpperCase(), Volume: '', Unusual: '', Source: 'Tradytics',
+    Side: row.side, Condition: row.condition, Events: row.events,
+    SectorSourceDate: sectors.get(row.symbol)?.date || null,
+    RawSignature: JSON.stringify(row),
+  };
+}
+
 function groupByTicker(flow, sideFilter) {
   const map = new Map();
   flow.filter(sideFilter).forEach((trade) => {
@@ -408,16 +431,21 @@ function buildDashboard(date, rows, startId) {
         quantity: Number(row.Qty) || 0,
         price: Number(row.Price) || 0,
         type: String(row.Type || '').trim().toUpperCase(),
-        volume: Number(row.Volume) || 0,
+        volume: row.Source === 'Tradytics' ? null : Number(row.Volume) || 0,
         open_interest: Number(row.OI) || 0,
         premium: money(premiumNum),
         premium_num: Math.round(premiumNum),
         algo_score: 0,
         sector: normalizeSector(row.Sector),
         is_golden: 0,
-        unusual: String(row.Unusual || '').toUpperCase() === 'TRUE',
+        unusual: row.Source === 'Tradytics' ? null : String(row.Unusual || '').toUpperCase() === 'TRUE',
         created_at: IMPORTED_AT,
         ...(row.Source === 'Xynth' ? { source: 'Xynth', source_timestamp: row.SourceTimestamp, source_timestamp_zone: timestampZone } : {}),
+        ...(row.Source === 'Tradytics' ? {
+          source: 'Tradytics', source_timestamp: row.SourceTimestamp, source_timestamp_zone: timestampZone,
+          side: row.Side, condition: row.Condition, events: row.Events,
+          sector_source_date: row.SectorSourceDate, source_identical_row_count: row.IdenticalCount,
+        } : {}),
       };
       trade.is_golden = isAlpha(trade) ? 1 : 0;
       trade.algo_score = algoScore(trade);
@@ -538,6 +566,12 @@ const embeddedData = embedded.data;
 let nextId = maxTradeId(embeddedData) + 1;
 const importedDates = [];
 const pending = new Map();
+const historicalSectors = new Map();
+for (const date of [...embeddedData.dates].sort().reverse()) {
+  for (const trade of embeddedData.data[date].dashboard.options_flow) {
+    if (!historicalSectors.has(trade.ticker) && trade.sector && trade.sector !== 'OTHER') historicalSectors.set(trade.ticker, { sector: trade.sector, date });
+  }
+}
 
 for (const file of csvFiles) {
   const abs = path.resolve(file);
@@ -547,14 +581,17 @@ for (const file of csvFiles) {
     continue;
   }
   const xynth = Object.hasOwn(rows[0], 'timestamp') && Object.hasOwn(rows[0], 'is_sweep');
+  const tradytics = Object.hasOwn(rows[0], 'time_local') && Object.hasOwn(rows[0], 'order') && Object.hasOwn(rows[0], 'symbol');
+  const provider = xynth ? 'Xynth' : tradytics ? 'Tradytics' : 'FlowAlgo';
   if (xynth) rows = rows.map(normalizeXynth).filter(Boolean);
+  else if (tradytics) rows = rows.map((row) => normalizeTradytics(row, historicalSectors));
   else if (!Object.hasOwn(rows[0], 'Date') || !Object.hasOwn(rows[0], 'C/P')) throw new Error(`Unrecognized CSV format: ${file}`);
   for (const row of rows) {
     const date = isoDate(row.Date);
     if (selectedDates.size && !selectedDates.has(date)) continue;
-    if (xynth && embeddedData.data[date]) throw new Error(`Xynth import refused to overwrite existing date ${date}`);
-    const item = pending.get(date) || { rows: [], xynth };
-    if (item.xynth !== xynth) throw new Error(`Cannot mix sources for ${date}`);
+    if ((xynth || tradytics) && embeddedData.data[date]) throw new Error(`${provider} import refused to overwrite existing date ${date}`);
+    const item = pending.get(date) || { rows: [], provider };
+    if (item.provider !== provider) throw new Error(`Cannot mix sources for ${date}`);
     item.rows.push(row);
     pending.set(date, item);
   }
@@ -564,12 +601,27 @@ for (const date of selectedDates) {
   if (!pending.has(date)) throw new Error(`No records for requested date ${date}; no changes written`);
 }
 if (!pending.size) throw new Error('No records selected; no changes written');
-for (const [date, { rows, xynth }] of pending) {
+for (const [date, { rows, provider }] of pending) {
+  const signatures = new Map();
+  if (provider === 'Tradytics') {
+    rows.forEach((row) => signatures.set(row.RawSignature, (signatures.get(row.RawSignature) || 0) + 1));
+    rows.forEach((row) => { row.IdenticalCount = signatures.get(row.RawSignature); });
+  }
   const result = buildDashboard(date, rows, nextId);
-  if (xynth) {
+  if (provider === 'Xynth') {
     const scope = rows.every((row) => row.Type === 'SWEEP') ? 'sweep export' : 'filtered flow export';
     result.dashboard.source = { provider: 'Xynth', scope, timestamp_zone: timestampZone, display_timezone: 'America/New_York' };
     result.dashboard.daily_recap.summary = `Xynth ${scope} only. ` + result.dashboard.daily_recap.summary;
+  }
+  if (provider === 'Tradytics') {
+    const repeats = rows.length - signatures.size;
+    result.dashboard.source = { provider, scope: 'filtered export records', timestamp_zone: timestampZone,
+      display_timezone: 'America/New_York', date_basis: 'explicit import date; CSV has no trade-date column',
+      extra_identical_rows: repeats, duplicate_policy: 'preserve; no execution IDs to establish whether repeats are distinct trades',
+      sector_basis: 'latest available historical ticker mapping; unmatched tickers OTHER',
+      missing_fields: ['daily volume', 'unusual flag'],
+    };
+    result.dashboard.daily_recap.summary = `Tradytics filtered export: totals count all ${rows.length} records, including ${repeats} extra identical rows whose execution status is unverified. ` + result.dashboard.daily_recap.summary;
   }
   embeddedData.data[date] = result;
   nextId += rows.length;

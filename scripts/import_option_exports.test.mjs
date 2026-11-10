@@ -79,3 +79,48 @@ test('existing FlowAlgo format retains ordinary imports', t => {
   assert.equal(d.golden_trades.length, 1); assert.equal(d.options_flow[0].capture_time, '2026-11-03 11:30:00');
   assert.equal(d.source, undefined); assert.equal(d.options_flow[0].source, undefined);
 });
+
+const tradyticsHeader = 'time_local,symbol,expiry,strike,type,spot,side,order,size,price,premium,open_interest,iv,condition,events';
+const tradyticsRecord = (overrides = {}) => ({ time_local: '10:14:58', symbol: 'SPY', expiry: '2026-12-18', strike: '660', type: 'Put', spot: '741.11', side: 'At bid', order: 'sweep', size: '1000', price: '35', premium: '3500000', open_interest: '8000', iv: '30', condition: 'Opening', events: '', ...overrides });
+function tradyticsFixture(t, records) {
+  const f = fixture(t, []);
+  fs.writeFileSync(path.join(f.dir, 'input.csv'), tradyticsHeader + '\n' + records.map(r => tradyticsHeader.split(',').map(k => r[k]).join(',')).join('\n'));
+  return f;
+}
+
+test('Tradytics preserves repeat records, separates missing data, and uses unchanged Alpha thresholds', t => {
+  const f = tradyticsFixture(t, [tradyticsRecord(), tradyticsRecord(), tradyticsRecord({ order: 'single' }), tradyticsRecord({ premium: '2000000' }), tradyticsRecord({ spot: '650' })]);
+  const args = ['--dates=2026-11-06', '--timestamp-zone=America/New_York'];
+  const result = f.run(...args); assert.equal(result.status, 0, result.stderr);
+  const data = f.data(); assert.deepEqual(data.data['2026-10-30'], old);
+  const d = data.data['2026-11-06'].dashboard;
+  assert.equal(d.options_flow.length, 5); assert.equal(d.golden_trades.length, 2);
+  assert.equal(d.options_flow[0].capture_time, '2026-11-06 10:14:58');
+  assert.equal(d.options_flow[0].volume, null); assert.equal(d.options_flow[0].unusual, null);
+  assert.equal(d.options_flow[0].source_identical_row_count, 2);
+  assert.equal(d.options_flow[0].sector, 'OTHER');
+  assert.equal(d.options_flow[0].side, 'At bid'); assert.equal(d.options_flow[0].condition, 'Opening');
+  assert.equal(d.options_flow[2].type, 'SINGLE'); assert.equal(d.options_flow[2].is_golden, 0);
+  assert.equal(d.source.extra_identical_rows, 1); assert(d.daily_recap.summary.includes('execution status is unverified'));
+  const saved = f.html(); assert.notEqual(f.run(...args).status, 0); assert.equal(f.html(), saved);
+});
+
+test('Tradytics requires one explicit date and timezone and rejects malformed prices atomically', t => {
+  const f = tradyticsFixture(t, [tradyticsRecord()]);
+  for (const args of [[], ['--dates=2026-11-06'], ['--dates=2026-11-05,2026-11-06', '--timestamp-zone=UTC'], ['--dates=2026-10-30', '--timestamp-zone=America/New_York']]) {
+    assert.notEqual(f.run(...args).status, 0); assert.equal(f.html(), initial);
+  }
+  fs.appendFileSync(path.join(f.dir, 'input.csv'), '\n' + tradyticsHeader.split(',').map(k => tradyticsRecord({ spot: 'bad' })[k]).join(','));
+  assert.notEqual(f.run('--dates=2026-11-06', '--timestamp-zone=America/New_York').status, 0); assert.equal(f.html(), initial);
+});
+
+test('Tradytics reuses known sectors with historical provenance without altering history', t => {
+  const f = tradyticsFixture(t, [tradyticsRecord({ symbol: 'OLD' })]);
+  const historical = { ...old, dashboard: { options_flow: [{ id: 20, ticker: 'OLD', sector: 'TECH' }] } };
+  const seed = f.data(); seed.data['2026-10-30'] = historical;
+  fs.writeFileSync(path.join(f.dir, 'index.html'), initial.replace(/const EMBEDDED_DATA = [\s\S]*?;\n<select/, () => 'const EMBEDDED_DATA = ' + JSON.stringify(seed, null, 2) + ';\n<select'));
+  assert.equal(f.run('--dates=2026-11-06', '--timestamp-zone=America/New_York').status, 0);
+  const data = f.data(); assert.deepEqual(data.data['2026-10-30'], historical);
+  const trade = data.data['2026-11-06'].dashboard.options_flow[0];
+  assert.equal(trade.sector, 'TECH'); assert.equal(trade.sector_source_date, '2026-10-30');
+});
